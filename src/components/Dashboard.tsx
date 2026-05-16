@@ -1,6 +1,40 @@
 import React, { useState, useEffect } from 'react';
-import { Plane, MapPin, CloudRain, Navigation, Calendar, Plus, ChevronRight, X } from 'lucide-react';
+import { Plane, MapPin, CloudRain, Navigation, Calendar, Plus, ChevronRight, X, GripVertical } from 'lucide-react';
 import { useTravelStore } from '../store';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+function SortableTripItem({ trip, onSelect }: { trip: any, onSelect: (id: string) => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: trip.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 1 : 0,
+    position: 'relative' as const,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="glass-card" onClick={() => onSelect(trip.id)}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <div {...attributes} {...listeners} onClick={(e) => e.stopPropagation()} style={{ cursor: 'grab', padding: '0.5rem', marginLeft: '-0.5rem', color: 'var(--text-secondary)' }}>
+            <GripVertical size={20} />
+          </div>
+          <div>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '0.25rem' }}>{trip.tripName}</h3>
+            <div className="flex items-center gap-1" style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+              <Calendar size={14} />
+              <span>{trip.tripDate ? `${new Date(trip.tripDate).toLocaleDateString('ja-JP')} 出発` : '日付未定'}</span>
+            </div>
+          </div>
+        </div>
+        <ChevronRight size={20} color="var(--text-secondary)" />
+      </div>
+    </div>
+  );
+}
 
 export default function Dashboard() {
   const trips = useTravelStore((state) => state.trips);
@@ -9,6 +43,21 @@ export default function Dashboard() {
   const addTrip = useTravelStore((state) => state.addTrip);
   const updateTrip = useTravelStore((state) => state.updateTrip);
   const deleteTrip = useTravelStore((state) => state.deleteTrip);
+  const reorderTrips = useTravelStore((state) => state.reorderTrips);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIndex = trips.findIndex(t => t.id === active.id);
+      const newIndex = trips.findIndex(t => t.id === over.id);
+      reorderTrips(oldIndex, newIndex);
+    }
+  };
 
   const [isAddingTrip, setIsAddingTrip] = useState(false);
   const [newTripName, setNewTripName] = useState('');
@@ -76,23 +125,13 @@ export default function Dashboard() {
         </div>
         
         <div className="flex" style={{ flexDirection: 'column', gap: '1rem' }}>
-          {trips.map(trip => (
-            <div 
-              key={trip.id} 
-              className="glass-card" 
-              onClick={() => selectTrip(trip.id)}
-              style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-            >
-              <div>
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '0.25rem' }}>{trip.tripName}</h3>
-                <div className="flex items-center gap-1" style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-                  <Calendar size={14} />
-                  <span>{trip.tripDate ? `${new Date(trip.tripDate).toLocaleDateString('ja-JP')} 出発` : '日付未定'}</span>
-                </div>
-              </div>
-              <ChevronRight size={20} color="var(--text-secondary)" />
-            </div>
-          ))}
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={trips.map(t => t.id)} strategy={verticalListSortingStrategy}>
+              {trips.map(trip => (
+                <SortableTripItem key={trip.id} trip={trip} onSelect={selectTrip} />
+              ))}
+            </SortableContext>
+          </DndContext>
           {trips.length === 0 && (
             <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
               旅行計画がありません。<br/>右上のボタンから追加してください。

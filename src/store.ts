@@ -92,6 +92,7 @@ interface TravelStore {
   addTrip: (trip: Omit<Trip, 'id' | 'itineraryCategories' | 'bookings' | 'expenses' | 'packingList' | 'shoppingList' | 'memories' | 'preparationTasks'>) => void;
   updateTrip: (id: string, tripName: string, tripDate: string | null) => void;
   deleteTrip: (id: string) => void;
+  reorderTrips: (startIndex: number, endIndex: number) => void;
   // Methods below act on the selectedTripId
   addCategory: (category: Omit<TripCategory, 'id'>) => void;
   addEvent: (categoryId: string, dayId: string, event: Omit<Event, 'id'>) => void;
@@ -202,6 +203,13 @@ export const useTravelStore = create<TravelStore>()(
           trips: newTrips,
           selectedTripId: state.selectedTripId === id ? (newTrips[0]?.id || null) : state.selectedTripId
         };
+      }),
+
+      reorderTrips: (startIndex, endIndex) => set((state) => {
+        const newTrips = Array.from(state.trips);
+        const [removed] = newTrips.splice(startIndex, 1);
+        newTrips.splice(endIndex, 0, removed);
+        return { trips: newTrips };
       }),
 
       addCategory: (category) => set((state) => {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, NavLink } from 'react-router-dom';
-import { Home, Ticket, Wallet, Calendar, Package, Lock, Gift, Image as ImageIcon } from 'lucide-react';
+import { Home, Ticket, Wallet, Calendar, Package, Lock, Gift, Image as ImageIcon, CalendarClock } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import Itinerary from './components/Itinerary';
 import Bookings from './components/Bookings';
@@ -8,6 +8,7 @@ import Budget from './components/Budget';
 import PackingList from './components/PackingList';
 import Shopping from './components/Shopping';
 import Memories from './components/Memories';
+import Preparation from './components/Preparation';
 import AIChatbot from './components/AIChatbot';
 import { useTravelStore } from './store';
 import './index.css';
@@ -117,6 +118,10 @@ function Layout({ children }: { children: React.ReactNode }) {
             <Calendar size={22} />
             <span style={{ fontSize: '0.65rem' }}>日程</span>
           </NavLink>
+          <NavLink to="/preparation" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} style={{ minWidth: '48px' }}>
+            <CalendarClock size={22} />
+            <span style={{ fontSize: '0.65rem' }}>準備</span>
+          </NavLink>
           <NavLink to="/packing" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} style={{ minWidth: '48px' }}>
             <Package size={22} />
             <span style={{ fontSize: '0.65rem' }}>持物</span>
@@ -150,6 +155,7 @@ function App() {
         <Layout>
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/preparation" element={<Preparation />} />
             <Route path="/itinerary" element={<Itinerary />} />
             <Route path="/bookings" element={<Bookings />} />
             <Route path="/packing" element={<PackingList />} />

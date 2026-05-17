@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Plane, MapPin, CloudRain, Navigation, Calendar, Plus, ChevronRight, X, GripVertical } from 'lucide-react';
 import { useTravelStore } from '../store';
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import type { DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
@@ -25,7 +26,7 @@ function SortableTripItem({ trip, onSelect }: { trip: any, onSelect: (id: string
           <div>
             <h3 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '0.25rem' }}>{trip.tripName}</h3>
             <div className="flex items-center gap-1" style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-              <Calendar size={14} />
+              <span style={{ fontSize: '14px' }}>📅</span>
               <span>{trip.tripDate ? `${new Date(trip.tripDate).toLocaleDateString('ja-JP')} 出発` : '日付未定'}</span>
             </div>
           </div>
@@ -224,11 +225,11 @@ export default function Dashboard() {
               {nextEvent ? (
                 <>
                   <div className="flex items-center gap-2 mb-2">
-                    <Plane size={16} className="text-accent" />
+                    <span style={{ fontSize: '16px' }}>✈️</span>
                     <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>{nextEvent.title}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <MapPin size={16} className="text-accent" />
+                    <span style={{ fontSize: '16px' }}>📍</span>
                     <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>{nextEvent.location}</span>
                   </div>
                 </>
@@ -240,8 +241,8 @@ export default function Dashboard() {
         </div>
         
         {/* Decorative elements */}
-        <div style={{ position: 'absolute', right: '-20px', top: '-20px', opacity: 0.1, transform: 'rotate(15deg)' }}>
-          <Plane size={140} />
+        <div style={{ position: 'absolute', right: '-20px', top: '-20px', opacity: 0.1, transform: 'rotate(15deg)', fontSize: '140px', lineHeight: 1 }}>
+          ✈️
         </div>
       </div>
 
@@ -286,8 +287,8 @@ export default function Dashboard() {
       {/* Quick Status Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
         <div className="glass-card flex" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '0.75rem' }}>
-          <div style={{ padding: '0.5rem', background: 'rgba(59, 130, 246, 0.15)', borderRadius: '8px', color: '#3b82f6' }}>
-            <CloudRain size={20} />
+          <div style={{ padding: '0.5rem', background: 'rgba(59, 130, 246, 0.15)', borderRadius: '8px', fontSize: '1.5rem', lineHeight: 1 }}>
+            ☔
           </div>
           <div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>現地の天気</div>
@@ -296,8 +297,8 @@ export default function Dashboard() {
         </div>
         
         <div className="glass-card flex" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '0.75rem' }}>
-          <div style={{ padding: '0.5rem', background: 'rgba(16, 185, 129, 0.15)', borderRadius: '8px', color: 'var(--accent-color)' }}>
-            <Navigation size={20} />
+          <div style={{ padding: '0.5rem', background: 'rgba(16, 185, 129, 0.15)', borderRadius: '8px', fontSize: '1.5rem', lineHeight: 1 }}>
+            🏨
           </div>
           <div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>次のチェックイン</div>

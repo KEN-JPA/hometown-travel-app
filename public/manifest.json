@@ -1,0 +1,15 @@
+{
+  "name": "TRIP BASE",
+  "short_name": "TRIP BASE",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#10b981",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "192x192 512x512 1024x1024",
+      "type": "image/png"
+    }
+  ]
+}

@@ -13,19 +13,24 @@ export default defineConfig({
         name: 'TRIP BASE',
         short_name: 'TRIP BASE',
         description: '家族専用トラベルマネージャー',
-        theme_color: '#ffffff',
+        theme_color: '#10b981',
         background_color: '#ffffff',
         display: 'standalone',
         icons: [
           {
-            src: '/vite.svg',
+            src: '/icon.png',
             sizes: '192x192',
-            type: 'image/svg+xml'
+            type: 'image/png'
           },
           {
-            src: '/vite.svg',
+            src: '/icon.png',
             sizes: '512x512',
-            type: 'image/svg+xml'
+            type: 'image/png'
+          },
+          {
+            src: '/icon.png',
+            sizes: '1024x1024',
+            type: 'image/png'
           }
         ]
       }

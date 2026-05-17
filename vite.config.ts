@@ -8,7 +8,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon-v3.png', 'mask-icon.svg'],
+      includeAssets: ['apple-touch-icon-v3.png'],
       manifest: {
         name: 'TRIP BASE',
         short_name: 'TRIP BASE',

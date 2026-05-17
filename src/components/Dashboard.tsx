@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plane, MapPin, CloudRain, Navigation, Calendar, Plus, ChevronRight, X, GripVertical } from 'lucide-react';
+import { Plus, ChevronRight, X, GripVertical } from 'lucide-react';
 import { useTravelStore } from '../store';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';

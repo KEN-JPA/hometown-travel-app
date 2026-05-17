@@ -17,10 +17,17 @@ function SortableTripItem({ trip, onSelect }: { trip: any, onSelect: (id: string
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="glass-card" onClick={() => onSelect(trip.id)}>
+    <div 
+      ref={setNodeRef} 
+      {...attributes} 
+      {...listeners} 
+      style={{ ...style, cursor: 'grab' }} 
+      className="glass-card" 
+      onClick={() => onSelect(trip.id)}
+    >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <div {...attributes} {...listeners} onClick={(e) => e.stopPropagation()} style={{ cursor: 'grab', padding: '0.5rem', marginLeft: '-0.5rem', color: 'var(--text-secondary)' }}>
+          <div style={{ color: 'var(--text-secondary)' }}>
             <GripVertical size={20} />
           </div>
           <div>

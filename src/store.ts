@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { kvStorage } from './lib/kvStorage';
 export type IconType = 'plane' | 'car' | 'home' | 'building' | 'ticket' | 'map-pin';
 
 export interface Event {
@@ -524,6 +524,7 @@ export const useTravelStore = create<TravelStore>()(
     }),
     {
       name: 'hometown-trip-storage',
+      storage: createJSONStorage(() => kvStorage),
     }
   )
 );

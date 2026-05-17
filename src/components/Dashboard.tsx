@@ -116,9 +116,9 @@ export default function Dashboard() {
   };
 
   const handleDeleteTrip = () => {
-    if (!selectedTrip) return;
-    if (confirm('本当にこの旅行計画を削除しますか？')) {
-      deleteTrip(selectedTrip.id);
+    if (window.confirm('本当にこの旅行計画を削除しますか？')) {
+      if (selectedTripId) deleteTrip(selectedTripId);
+      selectTrip(null);
       setIsEditingTrip(false);
     }
   };
@@ -332,7 +332,11 @@ export default function Dashboard() {
             <div key={item.id} className="flex items-center justify-between" style={{ background: 'var(--glass-bg)', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
               <span style={{ fontWeight: 500 }}>{item.name}</span>
               <button 
-                onClick={() => deleteWishlistItem(item.id)}
+                onClick={() => {
+                  if (window.confirm('本当に削除しますか？')) {
+                    deleteWishlistItem(item.id);
+                  }
+                }}
                 style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
               >
                 <X size={18} />

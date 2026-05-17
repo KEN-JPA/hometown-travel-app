@@ -328,21 +328,36 @@ export default function Dashboard() {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          {(selectedTrip.wishlist || []).map((item) => (
-            <div key={item.id} className="flex items-center justify-between" style={{ background: 'var(--glass-bg)', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
-              <span style={{ fontWeight: 500 }}>{item.name}</span>
-              <button 
-                onClick={() => {
-                  if (window.confirm('本当に削除しますか？')) {
-                    deleteWishlistItem(item.id);
-                  }
-                }}
-                style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-              >
-                <X size={18} />
-              </button>
-            </div>
-          ))}
+          {(selectedTrip.wishlist || []).map((item) => {
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            const parts = item.name.split(urlRegex);
+            
+            return (
+              <div key={item.id} className="flex items-center justify-between" style={{ background: 'var(--glass-bg)', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+                <div style={{ fontWeight: 500, wordBreak: 'break-word', flex: 1, marginRight: '1rem', lineHeight: '1.4' }}>
+                  {parts.map((part, i) => 
+                    part.match(urlRegex) ? (
+                      <a key={i} href={part} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-color)', textDecoration: 'underline', wordBreak: 'break-all' }} onClick={e => e.stopPropagation()}>
+                        {part}
+                      </a>
+                    ) : (
+                      <span key={i}>{part}</span>
+                    )
+                  )}
+                </div>
+                <button 
+                  onClick={() => {
+                    if (window.confirm('本当に削除しますか？')) {
+                      deleteWishlistItem(item.id);
+                    }
+                  }}
+                  style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '0.25rem' }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            );
+          })}
 
           {/* Add Item Form */}
           <form 

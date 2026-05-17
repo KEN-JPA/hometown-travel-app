@@ -52,6 +52,8 @@ export default function Dashboard() {
   const updateTrip = useTravelStore((state) => state.updateTrip);
   const deleteTrip = useTravelStore((state) => state.deleteTrip);
   const reorderTrips = useTravelStore((state) => state.reorderTrips);
+  const addWishlistItem = useTravelStore((state) => state.addWishlistItem);
+  const deleteWishlistItem = useTravelStore((state) => state.deleteWishlistItem);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -311,6 +313,57 @@ export default function Dashboard() {
             <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>次のチェックイン</div>
             <div style={{ fontSize: '1.1rem', fontWeight: 600, fontFamily: 'Outfit' }}>トヨタレンタカー</div>
           </div>
+        </div>
+      </div>
+
+      {/* Wishlist / 行きたいとこメモ Section */}
+      <div className="glass-panel" style={{ marginTop: '0.5rem' }}>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <div style={{ background: 'var(--accent-glow)', padding: '0.5rem', borderRadius: '8px', color: 'var(--accent-color)' }}>
+              <span style={{ fontSize: '1.25rem' }}>📍</span>
+            </div>
+            <h2 className="title" style={{ fontSize: '1.25rem', marginBottom: 0 }}>行きたいとこメモ</h2>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          {(selectedTrip.wishlist || []).map((item) => (
+            <div key={item.id} className="flex items-center justify-between" style={{ background: 'var(--glass-bg)', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+              <span style={{ fontWeight: 500 }}>{item.name}</span>
+              <button 
+                onClick={() => deleteWishlistItem(item.id)}
+                style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+          ))}
+
+          {/* Add Item Form */}
+          <form 
+            onSubmit={(e) => {
+              e.preventDefault();
+              const form = e.target as HTMLFormElement;
+              const input = form.elements.namedItem('wishlistName') as HTMLInputElement;
+              if (input.value.trim()) {
+                addWishlistItem(input.value.trim());
+                input.value = '';
+              }
+            }}
+            style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}
+          >
+            <input 
+              type="text" 
+              name="wishlistName"
+              className="input-field" 
+              placeholder="行きたい場所を追加..." 
+              style={{ flex: 1 }}
+            />
+            <button type="submit" className="btn-primary" style={{ padding: '0.75rem' }}>
+              <Plus size={20} />
+            </button>
+          </form>
         </div>
       </div>
     </div>

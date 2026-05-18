@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, NavLink } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, NavLink, Navigate } from 'react-router-dom';
 import { Home, Ticket, Wallet, Calendar, Package, Lock, Gift, Image as ImageIcon, CalendarClock } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import Itinerary from './components/Itinerary';
@@ -109,7 +109,7 @@ function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Only show bottom nav if a trip is selected (so Home acts as Trip Selector) */}
       {selectedTripId && (
-        <nav className="bottom-nav" style={{ padding: '0.5rem 1rem', display: 'flex', overflowX: 'auto', gap: '0.5rem' }}>
+        <nav className="bottom-nav">
           <NavLink to="/" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} style={{ minWidth: '48px' }}>
             <Home size={22} />
             <span style={{ fontSize: '0.65rem' }}>ホーム</span>
@@ -185,6 +185,7 @@ function App() {
             <Route path="/shopping" element={<Shopping />} />
             <Route path="/memories" element={<Memories />} />
             <Route path="/budget" element={<Budget />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Layout>
       </AuthGuard>

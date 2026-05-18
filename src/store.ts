@@ -101,7 +101,9 @@ interface TravelStore {
   reorderTrips: (startIndex: number, endIndex: number) => void;
   // Methods below act on the selectedTripId
   addCategory: (category: Omit<TripCategory, 'id'>) => void;
+  addDaySchedule: (categoryId: string, date: string) => void;
   addEvent: (categoryId: string, dayId: string, event: Omit<Event, 'id'>) => void;
+  updateEvent: (categoryId: string, dayId: string, eventId: string, updates: Partial<Event>) => void;
   deleteEvent: (categoryId: string, dayId: string, eventId: string) => void;
   addBooking: (booking: Omit<Booking, 'id'>) => void;
   deleteBooking: (bookingId: string) => void;
@@ -232,6 +234,23 @@ export const useTravelStore = create<TravelStore>()(
         };
       }),
 
+      addDaySchedule: (categoryId, date) => set((state) => {
+        if (!state.selectedTripId) return state;
+        return {
+          trips: state.trips.map(trip => {
+            if (trip.id !== state.selectedTripId) return trip;
+            return {
+              ...trip,
+              itineraryCategories: trip.itineraryCategories.map(cat => 
+                cat.id === categoryId 
+                  ? { ...cat, schedules: [...cat.schedules, { id: generateId(), date, events: [] }] }
+                  : cat
+              )
+            };
+          })
+        };
+      }),
+
       addEvent: (categoryId, dayId, event) => set((state) => {
         if (!state.selectedTripId) return state;
         return {
@@ -245,6 +264,30 @@ export const useTravelStore = create<TravelStore>()(
                   ...cat,
                   schedules: cat.schedules.map(day => 
                     day.id === dayId ? { ...day, events: [...day.events, { ...event, id: generateId() }] } : day
+                  )
+                };
+              })
+            };
+          })
+        };
+      }),
+
+      updateEvent: (categoryId, dayId, eventId, updates) => set((state) => {
+        if (!state.selectedTripId) return state;
+        return {
+          trips: state.trips.map(trip => {
+            if (trip.id !== state.selectedTripId) return trip;
+            return {
+              ...trip,
+              itineraryCategories: trip.itineraryCategories.map(cat => {
+                if (cat.id !== categoryId) return cat;
+                return {
+                  ...cat,
+                  schedules: cat.schedules.map(day => 
+                    day.id === dayId ? { 
+                      ...day, 
+                      events: day.events.map(e => e.id === eventId ? { ...e, ...updates } : e) 
+                    } : day
                   )
                 };
               })

@@ -66,35 +66,41 @@ export default function PackingList() {
 
       {isAdding && (
         <form onSubmit={handleAdd} className="glass-panel mb-6" style={{ padding: '1rem', background: 'rgba(255,255,255,0.6)' }}>
-          <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '1rem' }}>新しい持ち物を追加</h3>
-          <div className="flex gap-2 mb-3">
-            <select 
-              value={newItemCategory}
-              onChange={(e) => setNewItemCategory(e.target.value)}
-              style={{ padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'white' }}
-            >
-              <option value="重要">重要書類・貴重品</option>
-              <option value="衣類">衣類</option>
-              <option value="日用品">日用品</option>
-              <option value="ガジェット">ガジェット</option>
-              <option value="その他">その他</option>
-            </select>
-            <input 
-              type="text" 
-              value={newItemName}
-              onChange={(e) => setNewItemName(e.target.value)}
-              placeholder="例: 歯ブラシ" 
-              style={{ flex: 1, padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)' }}
-              autoFocus
-            />
+          <div className="border-b border-slate-200 pb-2 mb-3">
+            <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#1e293b' }}>新しい持ち物を追加</h3>
+            <p className="text-xs text-slate-500 mt-1">ジャンルを選んで、アイテム名を入力してください。</p>
           </div>
-          <div className="flex justify-end gap-2">
-            <button type="button" onClick={() => setIsAdding(false)} style={{ padding: '0.5rem 1rem', border: 'none', background: 'none', color: 'var(--text-secondary)' }}>
-              キャンセル
-            </button>
-            <button type="submit" className="btn-primary" style={{ padding: '0.5rem 1rem' }}>
-              追加する
-            </button>
+          <div className="flex gap-2 mb-3">
+            <div style={{ flex: '0 0 140px' }}>
+              <div className="text-xs font-bold text-slate-700 mb-1">ジャンル</div>
+              <select 
+                value={newItemCategory}
+                onChange={(e) => setNewItemCategory(e.target.value)}
+                style={{ width: '100%', padding: '0.6rem 0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'white' }}
+              >
+                <option value="重要">重要書類・貴重品</option>
+                <option value="衣類">衣類</option>
+                <option value="日用品">日用品</option>
+                <option value="ガジェット">ガジェット</option>
+                <option value="その他">その他</option>
+              </select>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div className="text-xs font-bold text-slate-700 mb-1">アイテム名</div>
+              <input 
+                type="text" 
+                value={newItemName}
+                onChange={(e) => setNewItemName(e.target.value)}
+                placeholder="例: 充電器、パスポート" 
+                style={{ width: '100%', padding: '0.6rem 0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)' }}
+                autoFocus
+                required
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="submit" className="btn-primary flex-1" style={{ padding: '0.5rem 1rem' }}>保存する</button>
+            <button type="button" className="btn-secondary flex-1" onClick={() => setIsAdding(false)} style={{ padding: '0.5rem 1rem' }}>キャンセル</button>
           </div>
         </form>
       )}
@@ -138,8 +144,13 @@ export default function PackingList() {
       ))}
       
       {items.length === 0 && !isAdding && (
-        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
-          持ち物が登録されていません。上のボタンから追加してください。
+        <div className="glass-panel p-6 text-center text-slate-500 mt-6">
+          <Package size={40} className="mx-auto mb-3 opacity-30 text-indigo-500" />
+          <p className="font-bold text-slate-700 mb-1">持ち物リストが空です</p>
+          <p className="text-sm">
+            上の「アイテム追加」ボタンから、旅行に必要なものをリストアップしましょう。<br />
+            まずは「パスポート」や「財布」など、絶対に忘れてはいけないものから追加するのがおすすめです！
+          </p>
         </div>
       )}
     </div>

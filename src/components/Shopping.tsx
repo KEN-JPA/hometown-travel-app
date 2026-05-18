@@ -58,19 +58,25 @@ export default function Shopping() {
 
       {isAdding && (
         <form onSubmit={handleAdd} className="glass-panel mb-6 p-4">
-          <div className="flex gap-2">
+          <div className="border-b border-slate-200 pb-2 mb-3">
+            <h3 className="font-bold text-slate-800">新しいお土産を追加</h3>
+            <p className="text-xs text-slate-500 mt-1">誰に、何を買うかをメモしておきましょう。</p>
+          </div>
+          <div>
+            <div className="text-xs font-bold text-slate-700 mb-1">お土産の内容</div>
             <input 
               type="text" 
               value={newItemName}
               onChange={(e) => setNewItemName(e.target.value)}
-              placeholder="誰に何を買う？ (例: 職場にクッキー)" 
+              placeholder="例: 職場の部署へ 個包装のクッキー" 
               className="input-field mb-0"
               autoFocus
+              required
             />
           </div>
           <div className="flex justify-end gap-2 mt-3">
-            <button type="submit" className="btn-primary flex-1">保存</button>
-            <button type="button" onClick={() => setIsAdding(false)} className="btn-secondary">キャンセル</button>
+            <button type="submit" className="btn-primary flex-1">保存する</button>
+            <button type="button" onClick={() => setIsAdding(false)} className="btn-secondary flex-1">キャンセル</button>
           </div>
         </form>
       )}
@@ -107,9 +113,13 @@ export default function Shopping() {
       </div>
       
       {items.length === 0 && !isAdding && (
-        <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-secondary)' }}>
-          <ShoppingBag size={48} color="var(--glass-border)" style={{ margin: '0 auto 1rem' }} />
-          お土産リストが空です。<br/>右上のボタンから追加しましょう！
+        <div className="glass-panel p-6 text-center text-slate-500 mt-6">
+          <ShoppingBag size={40} className="mx-auto mb-3 opacity-30 text-indigo-500" />
+          <p className="font-bold text-slate-700 mb-1">お土産リストが空です</p>
+          <p className="text-sm">
+            上の「追加」ボタンから、誰に何を買うかメモしておきましょう。<br />
+            リスト化しておくと、現地での買い忘れや買いすぎを防げます！
+          </p>
         </div>
       )}
     </div>

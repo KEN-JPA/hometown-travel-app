@@ -84,7 +84,10 @@ export default function Memories() {
           <Upload size={24} />
         </div>
         <span style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)' }}>写真をアップロード</span>
-        <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>スマホのカメラロールから選べます</span>
+        <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '0.5rem', textAlign: 'center' }}>
+          旅行中の楽しかった思い出や、<br/>
+          美味しかったご飯の写真を残しましょう！
+        </span>
       </label>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '1rem' }}>
@@ -117,8 +120,13 @@ export default function Memories() {
       </div>
       
       {memories.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
-          まだ写真がありません。
+        <div className="glass-panel p-6 text-center text-slate-500 mt-6">
+          <ImageIcon size={40} className="mx-auto mb-3 opacity-30 text-indigo-500" />
+          <p className="font-bold text-slate-700 mb-1">まだ写真がありません</p>
+          <p className="text-sm">
+            上のボタンから、旅行の思い出を保存できます。<br />
+            航空券の半券や、旅先の風景、家族の写真などを追加して、オリジナルのアルバムを作りましょう！
+          </p>
         </div>
       )}
     </div>

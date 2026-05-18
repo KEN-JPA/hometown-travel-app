@@ -229,23 +229,54 @@ export default function Bookings() {
 
       {isAdding && (
         <form onSubmit={handleAdd} className="glass-panel mb-6 p-4">
+          <div className="border-b border-slate-200 pb-2 mb-3">
+            <h3 className="font-bold text-slate-800">新しい予約を追加</h3>
+            <p className="text-xs text-slate-500 mt-1">
+              飛行機、ホテル、レンタカーなどの予約情報を登録しておくと、当日スムーズに確認できます。
+            </p>
+          </div>
           <div className="flex flex-col gap-3">
-            <input type="text" placeholder="カテゴリ (例: 飛行機)" className="input-field" value={newCat} onChange={e => setNewCat(e.target.value)} required />
-            <input type="text" placeholder="会社名・便名 (例: ANA 051便)" className="input-field" value={newProvider} onChange={e => setNewProvider(e.target.value)} required />
-            <input type="text" placeholder="予約番号" className="input-field" value={newRef} onChange={e => setNewRef(e.target.value)} />
-            <input type="url" placeholder="チケットURL (任意)" className="input-field" value={newLink} onChange={e => setNewLink(e.target.value)} />
-            <div className="flex gap-2">
-              <button type="submit" className="btn-primary flex-1">保存</button>
-              <button type="button" className="btn-secondary" onClick={() => setIsAdding(false)}>キャンセル</button>
+            <div>
+              <div className="text-xs font-bold text-slate-700 mb-1">種類（必須）</div>
+              <input type="text" placeholder="例: 飛行機、ホテル、レンタカー、ツアー" className="input-field" style={{ marginBottom: 0 }} value={newCat} onChange={e => setNewCat(e.target.value)} required autoFocus />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-slate-700 mb-1">会社名や便名・施設名（必須）</div>
+              <input type="text" placeholder="例: ANA 051便、〇〇ホテル" className="input-field" style={{ marginBottom: 0 }} value={newProvider} onChange={e => setNewProvider(e.target.value)} required />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-slate-700 mb-1">予約番号（あると便利！）</div>
+              <input type="text" placeholder="例: AB123456" className="input-field" style={{ marginBottom: 0 }} value={newRef} onChange={e => setNewRef(e.target.value)} />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-slate-700 mb-1">予約確認ページのURL（任意）</div>
+              <input type="url" placeholder="例: https://..." className="input-field" style={{ marginBottom: 0 }} value={newLink} onChange={e => setNewLink(e.target.value)} />
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button type="submit" className="btn-primary flex-1">保存する</button>
+              <button type="button" className="btn-secondary flex-1" onClick={() => setIsAdding(false)}>キャンセル</button>
             </div>
           </div>
         </form>
       )}
       
       <div className="flex" style={{ flexDirection: 'column', gap: '1rem' }}>
-        {bookings.map((booking) => (
-          <BookingCard key={booking.id} booking={booking} />
-        ))}
+        {bookings.length > 0 ? (
+          bookings.map((booking) => (
+            <BookingCard key={booking.id} booking={booking} />
+          ))
+        ) : (
+          !isAdding && (
+            <div className="glass-panel p-6 text-center text-slate-500">
+              <Ticket size={40} className="mx-auto mb-3 opacity-30 text-indigo-500" />
+              <p className="font-bold text-slate-700 mb-1">予約情報がありません</p>
+              <p className="text-sm">
+                上の「追加」ボタンから、飛行機やホテルの予約情報を登録しましょう。<br />
+                QRコードやスクショを保存しておくと、当日ネットが繋がらなくても安心です！
+              </p>
+            </div>
+          )
+        )}
       </div>
     </div>
   );

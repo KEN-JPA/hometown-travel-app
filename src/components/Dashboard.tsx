@@ -143,8 +143,11 @@ export default function Dashboard() {
             </SortableContext>
           </DndContext>
           {trips.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
-              旅行計画がありません。<br/>右上のボタンから追加してください。
+            <div className="glass-panel p-6 text-center text-slate-500 mt-4">
+              <p className="font-bold text-slate-700 mb-1">旅行計画がありません</p>
+              <p className="text-sm">
+                右上の「新規作成」ボタンから、これからの旅行プランや、過去の思い出アルバムを作りましょう！
+              </p>
             </div>
           )}
         </div>
@@ -157,23 +160,31 @@ export default function Dashboard() {
                 <button onClick={() => setIsAddingTrip(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
               </div>
               <form onSubmit={handleAddTrip}>
-                <label className="input-label">旅行のタイトル</label>
-                <input 
-                  type="text" 
-                  className="input-field" 
-                  placeholder="例: 夏の沖縄家族旅行" 
-                  value={newTripName}
-                  onChange={e => setNewTripName(e.target.value)}
-                  required
-                />
+                <div className="mb-4">
+                  <label className="text-xs font-bold text-slate-700 mb-1 block">旅行のタイトル（必須）</label>
+                  <input 
+                    type="text" 
+                    className="input-field" 
+                    style={{ marginBottom: 0 }}
+                    placeholder="例: 2026 夏の北海道 家族旅行" 
+                    value={newTripName}
+                    onChange={e => setNewTripName(e.target.value)}
+                    required
+                  />
+                  <p className="text-xs text-slate-500 mt-1">行き先や目的を入れると見やすくなります。</p>
+                </div>
                 
-                <label className="input-label">出発日 (未定でもOK)</label>
-                <input 
-                  type="date" 
-                  className="input-field" 
-                  value={newTripDate}
-                  onChange={e => setNewTripDate(e.target.value)}
-                />
+                <div className="mb-4">
+                  <label className="text-xs font-bold text-slate-700 mb-1 block">出発日（任意・未定でもOK）</label>
+                  <input 
+                    type="date" 
+                    className="input-field" 
+                    style={{ marginBottom: 0 }}
+                    value={newTripDate}
+                    onChange={e => setNewTripDate(e.target.value)}
+                  />
+                  <p className="text-xs text-slate-500 mt-1">日付を入れると、トップ画面で「あと何日」かカウントダウンされます！</p>
+                </div>
                 
                 <button type="submit" className="btn-primary" style={{ width: '100%', justifyContent: 'center', marginTop: '1rem' }}>
                   作成する
@@ -376,8 +387,8 @@ export default function Dashboard() {
               type="text" 
               name="wishlistName"
               className="input-field" 
-              placeholder="行きたい場所を追加..." 
-              style={{ flex: 1 }}
+              style={{ flex: 1, marginBottom: 0 }}
+              placeholder="例: 有名な〇〇カフェに行きたい！(URLもOK)" 
             />
             <button type="submit" className="btn-primary" style={{ padding: '0.75rem' }}>
               <Plus size={20} />

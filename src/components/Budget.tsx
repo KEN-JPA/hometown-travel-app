@@ -53,24 +53,39 @@ export default function Budget() {
       
       {isAdding && (
         <form onSubmit={handleAdd} className="glass-panel mb-6 p-4">
+          <div className="border-b border-slate-200 pb-2 mb-3">
+            <h3 className="font-bold text-slate-800">新しい費用を追加</h3>
+            <p className="text-xs text-slate-500 mt-1">旅行にかかった費用や、予定している予算を入力してください。</p>
+          </div>
           <div className="flex flex-col gap-3">
-            <input
-              type="text"
-              placeholder="項目名 (例: 食費)"
-              className="input-field"
-              value={newExpenseName}
-              onChange={(e) => setNewExpenseName(e.target.value)}
-            />
-            <input
-              type="number"
-              placeholder="金額 (円)"
-              className="input-field"
-              value={newExpenseAmount}
-              onChange={(e) => setNewExpenseAmount(e.target.value)}
-            />
-            <div className="flex gap-2">
-              <button type="submit" className="btn-primary flex-1">保存</button>
-              <button type="button" className="btn-secondary" onClick={() => setIsAdding(false)}>キャンセル</button>
+            <div>
+              <div className="text-xs font-bold text-slate-700 mb-1">費用の項目（必須）</div>
+              <input
+                type="text"
+                placeholder="例: 食費、お土産代、交通費"
+                className="input-field"
+                style={{ marginBottom: 0 }}
+                value={newExpenseName}
+                onChange={(e) => setNewExpenseName(e.target.value)}
+                required
+                autoFocus
+              />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-slate-700 mb-1">金額（円）</div>
+              <input
+                type="number"
+                placeholder="例: 5000"
+                className="input-field"
+                style={{ marginBottom: 0 }}
+                value={newExpenseAmount}
+                onChange={(e) => setNewExpenseAmount(e.target.value)}
+                required
+              />
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button type="submit" className="btn-primary flex-1">保存する</button>
+              <button type="button" className="btn-secondary flex-1" onClick={() => setIsAdding(false)}>キャンセル</button>
             </div>
           </div>
         </form>
@@ -85,26 +100,40 @@ export default function Budget() {
       </div>
 
       {/* Breakdown */}
-      <h3 className="title" style={{ fontSize: '1.1rem', marginBottom: '1rem' }}>内訳</h3>
-      <div className="flex" style={{ flexDirection: 'column', gap: '0.75rem' }}>
-        {expenses.map((exp) => (
-          <div key={exp.id} className="glass-card flex items-center justify-between" style={{ padding: '1rem' }}>
-            <div className="flex items-center gap-3">
-              <div style={{ width: '12px', height: '12px', borderRadius: '4px', background: exp.color }}></div>
-              <span style={{ fontWeight: 500 }}>{exp.category}</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <span style={{ fontWeight: 600, fontFamily: 'Outfit' }}>¥{exp.amount.toLocaleString()}</span>
-              <button 
-                onClick={() => deleteExpense(exp.id)}
-                style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex' }}
-              >
-                <X size={16} />
-              </button>
-            </div>
+      {expenses.length > 0 ? (
+        <>
+          <h3 className="title" style={{ fontSize: '1.1rem', marginBottom: '1rem' }}>内訳</h3>
+          <div className="flex" style={{ flexDirection: 'column', gap: '0.75rem' }}>
+            {expenses.map((exp) => (
+              <div key={exp.id} className="glass-card flex items-center justify-between" style={{ padding: '1rem' }}>
+                <div className="flex items-center gap-3">
+                  <div style={{ width: '12px', height: '12px', borderRadius: '4px', background: exp.color }}></div>
+                  <span style={{ fontWeight: 500 }}>{exp.category}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span style={{ fontWeight: 600, fontFamily: 'Outfit' }}>¥{exp.amount.toLocaleString()}</span>
+                  <button 
+                    onClick={() => deleteExpense(exp.id)}
+                    style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex' }}
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </>
+      ) : (
+        !isAdding && (
+          <div className="glass-panel p-6 text-center text-slate-500 mt-6">
+            <p className="font-bold text-slate-700 mb-1">費用データがありません</p>
+            <p className="text-sm">
+              上の「追加」ボタンから、使ったお金や予定の予算を記録しましょう。<br />
+              旅行全体でいくらかかっているかがひと目でわかります！
+            </p>
+          </div>
+        )
+      )}
     </div>
   );
 }

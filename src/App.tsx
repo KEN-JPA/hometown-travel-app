@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, NavLink, Navigate } from 'react-router-dom';
-import { Home, Ticket, Wallet, Calendar, Package, Lock, Gift, Image as ImageIcon, CalendarClock } from 'lucide-react';
+import { Home, Ticket, Wallet, Calendar, Package, Lock, Gift, Image as ImageIcon, CalendarClock, Search } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import Itinerary from './components/Itinerary';
 import Bookings from './components/Bookings';
@@ -10,6 +10,7 @@ import Shopping from './components/Shopping';
 import Memories from './components/Memories';
 import Preparation from './components/Preparation';
 import AIChatbot from './components/AIChatbot';
+import SearchModal from './components/SearchModal';
 import { useTravelStore } from './store';
 import './index.css';
 
@@ -83,6 +84,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
 function Layout({ children }: { children: React.ReactNode }) {
   const selectedTripId = useTravelStore((state) => state.selectedTripId);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   return (
     <>
@@ -94,6 +96,11 @@ function Layout({ children }: { children: React.ReactNode }) {
           <p className="subtitle" style={{ fontSize: '0.75rem' }}>家族の思い出マネージャー</p>
         </div>
         <div className="flex items-center gap-2">
+          {selectedTripId && (
+            <button onClick={() => setIsSearchOpen(true)} style={{ width: 32, height: 32, borderRadius: '50%', background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+              <Search size={20} />
+            </button>
+          )}
           <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--glass-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--glass-border)', color: 'var(--accent-color)' }}>
             <span style={{ fontSize: '0.75rem', fontWeight: 'bold' }}>家族</span>
           </div>
@@ -106,6 +113,9 @@ function Layout({ children }: { children: React.ReactNode }) {
 
       {/* AI Chatbot */}
       <AIChatbot />
+
+      {/* Global Search Modal */}
+      {isSearchOpen && <SearchModal onClose={() => setIsSearchOpen(false)} />}
 
       {/* Only show bottom nav if a trip is selected (so Home acts as Trip Selector) */}
       {selectedTripId && (

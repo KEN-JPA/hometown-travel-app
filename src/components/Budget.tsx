@@ -8,6 +8,7 @@ export default function Budget() {
   const selectedTrip = trips.find(t => t.id === selectedTripId);
   const addExpense = useTravelStore((state) => state.addExpense);
   const deleteExpense = useTravelStore((state) => state.deleteExpense);
+  const toggleExpensePaid = useTravelStore((state) => state.toggleExpensePaid);
 
   const [isAdding, setIsAdding] = useState(false);
   const [newExpenseName, setNewExpenseName] = useState('');
@@ -19,6 +20,7 @@ export default function Budget() {
 
   const expenses = selectedTrip.expenses;
   const total = expenses.reduce((acc, curr) => acc + curr.amount, 0);
+  const paidTotal = expenses.filter(e => e.isPaid).reduce((acc, curr) => acc + curr.amount, 0);
 
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,7 +33,8 @@ export default function Budget() {
     addExpense({
       category: newExpenseName,
       amount: parseInt(newExpenseAmount, 10),
-      color
+      color,
+      isPaid: false
     });
     
     setIsAdding(false);
@@ -92,11 +95,20 @@ export default function Budget() {
       )}
       
       {/* Total Overview */}
-      <div className="glass-panel" style={{ textAlign: 'center', padding: '2rem 1rem', marginBottom: '1.5rem', background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(255, 255, 255, 0.8))' }}>
-        <div style={{ color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>合計</div>
-        <div style={{ fontSize: '2.5rem', fontWeight: 800, fontFamily: 'Outfit' }}>
+      <div className="glass-panel" style={{ textAlign: 'center', padding: '1.5rem 1rem', marginBottom: '1.5rem', background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(255, 255, 255, 0.8))' }}>
+        <div style={{ color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>予算・費用合計</div>
+        <div style={{ fontSize: '2rem', fontWeight: 800, fontFamily: 'Outfit' }}>
           ¥{total.toLocaleString()}
         </div>
+        <div className="flex justify-center gap-4 mt-2 text-sm">
+          <div><span className="text-slate-500">支払済:</span> <span className="font-bold text-emerald-600">¥{paidTotal.toLocaleString()}</span></div>
+          <div><span className="text-slate-500">未払い:</span> <span className="font-bold text-amber-600">¥{(total - paidTotal).toLocaleString()}</span></div>
+        </div>
+        {selectedTrip.participantsCount && selectedTrip.participantsCount > 1 && (
+          <div className="mt-3 inline-block bg-white/50 px-3 py-1 rounded-full text-sm font-bold text-indigo-700">
+            1人あたり: ¥{Math.round(total / selectedTrip.participantsCount).toLocaleString()}
+          </div>
+        )}
       </div>
 
       {/* Breakdown */}
@@ -105,13 +117,24 @@ export default function Budget() {
           <h3 className="title" style={{ fontSize: '1.1rem', marginBottom: '1rem' }}>内訳</h3>
           <div className="flex" style={{ flexDirection: 'column', gap: '0.75rem' }}>
             {expenses.map((exp) => (
-              <div key={exp.id} className="glass-card flex items-center justify-between" style={{ padding: '1rem' }}>
+              <div key={exp.id} className="glass-card flex items-center justify-between" style={{ padding: '1rem', opacity: exp.isPaid ? 0.7 : 1 }}>
                 <div className="flex items-center gap-3">
                   <div style={{ width: '12px', height: '12px', borderRadius: '4px', background: exp.color }}></div>
-                  <span style={{ fontWeight: 500 }}>{exp.category}</span>
+                  <div className="flex flex-col">
+                    <span style={{ fontWeight: 500, textDecoration: exp.isPaid ? 'line-through' : 'none' }}>{exp.category}</span>
+                    <label className="flex items-center gap-1 mt-1 cursor-pointer w-fit">
+                      <input 
+                        type="checkbox" 
+                        checked={exp.isPaid || false} 
+                        onChange={() => toggleExpensePaid(exp.id)}
+                        className="accent-emerald-500 w-3 h-3"
+                      />
+                      <span className="text-xs text-slate-500">{exp.isPaid ? '支払済' : '未払い'}</span>
+                    </label>
+                  </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span style={{ fontWeight: 600, fontFamily: 'Outfit' }}>¥{exp.amount.toLocaleString()}</span>
+                  <span style={{ fontWeight: 600, fontFamily: 'Outfit', textDecoration: exp.isPaid ? 'line-through' : 'none' }}>¥{exp.amount.toLocaleString()}</span>
                   <button 
                     onClick={() => deleteExpense(exp.id)}
                     style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex' }}

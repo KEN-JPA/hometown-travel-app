@@ -27,6 +27,15 @@ export default function Preparation() {
     return new Date(a.targetDate).getTime() - new Date(b.targetDate).getTime();
   });
 
+  const isOverdue = (targetDate: string | null, status: string) => {
+    if (!targetDate || status === 'completed') return false;
+    const target = new Date(targetDate);
+    target.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return target < today;
+  };
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'completed': return <CheckCircle className="text-emerald-500" size={24} />;
@@ -119,8 +128,10 @@ export default function Preparation() {
             <p className="text-sm mt-1">「自動スケジュール生成」で標準項目を追加できます。</p>
           </div>
         ) : (
-          sortedTasks.map(task => (
-            <div key={task.id} className="glass-panel p-4 flex gap-4 items-start">
+          sortedTasks.map(task => {
+            const overdue = isOverdue(task.targetDate, task.status);
+            return (
+            <div key={task.id} className={`glass-panel p-4 flex gap-4 items-start ${overdue ? 'border-2 border-rose-200 bg-rose-50/30' : ''}`}>
               <button 
                 onClick={() => handleStatusToggle(task)}
                 className="mt-1 shrink-0 transition-transform active:scale-90"
@@ -173,8 +184,9 @@ export default function Preparation() {
                       </span>
                       
                       {task.targetDate && (
-                        <span className="text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
-                          目安: {new Date(task.targetDate).toLocaleDateString()}
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded ${overdue ? 'bg-rose-100 text-rose-700' : 'bg-indigo-50 text-indigo-600'}`}>
+                          {overdue ? '⚠️ 期限切れ: ' : '目安: '}
+                          {new Date(task.targetDate).toLocaleDateString()}
                         </span>
                       )}
                     </div>
@@ -188,7 +200,7 @@ export default function Preparation() {
                 )}
               </div>
             </div>
-          ))
+          )})
         )}
       </div>
 

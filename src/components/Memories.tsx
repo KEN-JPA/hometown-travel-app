@@ -9,9 +9,14 @@ export default function Memories() {
   const selectedTrip = trips.find(t => t.id === selectedTripId);
   
   const addMemory = useTravelStore((state) => state.addMemory);
+  const updateMemory = useTravelStore((state) => state.updateMemory);
   const deleteMemory = useTravelStore((state) => state.deleteMemory);
 
   const [images, setImages] = useState<Record<string, string>>({});
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editCaption, setEditCaption] = useState('');
+  const [editDate, setEditDate] = useState('');
+  const [editLocation, setEditLocation] = useState('');
 
   useEffect(() => {
     if (!selectedTrip) return;
@@ -69,6 +74,18 @@ export default function Memories() {
     }
   };
 
+  const startEditing = (mem: any) => {
+    setEditingId(mem.id);
+    setEditCaption(mem.caption || '');
+    setEditDate(mem.date || '');
+    setEditLocation(mem.location || '');
+  };
+
+  const saveEdit = (id: string) => {
+    updateMemory(id, { caption: editCaption, date: editDate, location: editLocation });
+    setEditingId(null);
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -90,31 +107,48 @@ export default function Memories() {
         </span>
       </label>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '1rem' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         {memories.map(mem => (
-          <div key={mem.id} className="glass-card" style={{ padding: '0.5rem', position: 'relative', overflow: 'hidden' }}>
-            {images[mem.id] ? (
-              <img 
-                src={images[mem.id]} 
-                alt={mem.caption} 
-                style={{ width: '100%', height: '150px', objectFit: 'cover', borderRadius: '12px' }} 
-              />
-            ) : (
-              <div style={{ width: '100%', height: '150px', background: 'var(--glass-bg)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <ImageIcon size={24} color="var(--text-secondary)" />
-              </div>
-            )}
-            <button 
-              onClick={() => handleDelete(mem.id, mem.imageKey)}
-              style={{ 
-                position: 'absolute', top: '0.75rem', right: '0.75rem', 
-                background: 'rgba(255,255,255,0.9)', border: 'none', borderRadius: '50%', 
-                width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: 'var(--danger)', cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-              }}
-            >
-              <Trash2 size={16} />
-            </button>
+          <div key={mem.id} className="glass-card" style={{ padding: '1rem', display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
+            <div style={{ flexShrink: 0, width: '120px', height: '120px' }}>
+              {images[mem.id] ? (
+                <img 
+                  src={images[mem.id]} 
+                  alt={mem.caption} 
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px' }} 
+                />
+              ) : (
+                <div style={{ width: '100%', height: '100%', background: 'var(--glass-bg)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <ImageIcon size={24} color="var(--text-secondary)" />
+                </div>
+              )}
+            </div>
+            
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {editingId === mem.id ? (
+                <div className="flex flex-col gap-2">
+                  <input type="text" value={editCaption} onChange={(e) => setEditCaption(e.target.value)} placeholder="キャプション" className="input-field mb-0 text-sm py-1" />
+                  <input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} className="input-field mb-0 text-sm py-1" />
+                  <input type="text" value={editLocation} onChange={(e) => setEditLocation(e.target.value)} placeholder="場所" className="input-field mb-0 text-sm py-1" />
+                  <div className="flex gap-2 mt-1">
+                    <button onClick={() => saveEdit(mem.id)} className="btn-primary py-1 px-3 text-xs">保存</button>
+                    <button onClick={() => setEditingId(null)} className="btn-secondary py-1 px-3 text-xs">キャンセル</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col h-full justify-between">
+                  <div>
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.25rem' }}>{mem.caption || 'タイトルなし'}</h3>
+                    {mem.date && <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>{mem.date}</p>}
+                    {mem.location && <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>📍 {mem.location}</p>}
+                  </div>
+                  <div className="flex gap-2 mt-3">
+                    <button onClick={() => startEditing(mem)} className="btn-secondary py-1 px-3 text-xs" style={{ background: 'var(--glass-bg)' }}>編集</button>
+                    <button onClick={() => handleDelete(mem.id, mem.imageKey)} className="btn-secondary py-1 px-3 text-xs" style={{ color: 'var(--danger)', background: 'var(--glass-bg)' }}>削除</button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         ))}
       </div>

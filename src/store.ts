@@ -40,6 +40,7 @@ export interface Expense {
   category: string;
   amount: number;
   color: string;
+  isPaid?: boolean;
 }
 
 export interface PackingItem {
@@ -47,18 +48,25 @@ export interface PackingItem {
   name: string;
   isPacked: boolean;
   category: string;
+  assignee?: string;
+  quantity?: number;
 }
 
 export interface ShoppingItem {
   id: string;
   name: string;
   isBought: boolean;
+  recipient?: string;
+  quantity?: number;
+  budget?: number;
 }
 
 export interface Memory {
   id: string;
   imageKey: string;
   caption: string;
+  date?: string;
+  location?: string;
 }
 
 export interface PreparationTask {
@@ -81,6 +89,7 @@ export interface Trip {
   id: string;
   tripName: string;
   tripDate: string | null;
+  participantsCount?: number;
   itineraryCategories: TripCategory[];
   bookings: Booking[];
   expenses: Expense[];
@@ -96,7 +105,7 @@ interface TravelStore {
   selectedTripId: string | null;
   selectTrip: (id: string | null) => void;
   addTrip: (trip: Omit<Trip, 'id' | 'itineraryCategories' | 'bookings' | 'expenses' | 'packingList' | 'shoppingList' | 'memories' | 'preparationTasks' | 'wishlist'>) => void;
-  updateTrip: (id: string, tripName: string, tripDate: string | null) => void;
+  updateTrip: (id: string, tripName: string, tripDate: string | null, participantsCount?: number) => void;
   deleteTrip: (id: string) => void;
   reorderTrips: (startIndex: number, endIndex: number) => void;
   // Methods below act on the selectedTripId
@@ -110,6 +119,7 @@ interface TravelStore {
   updateBookingImage: (bookingId: string, imageKey: string) => void;
   addExpense: (expense: Omit<Expense, 'id'>) => void;
   deleteExpense: (expenseId: string) => void;
+  toggleExpensePaid: (expenseId: string) => void;
   addPackingItem: (item: Omit<PackingItem, 'id' | 'isPacked'>) => void;
   togglePackingItem: (itemId: string) => void;
   deletePackingItem: (itemId: string) => void;
@@ -117,6 +127,7 @@ interface TravelStore {
   toggleShoppingItem: (itemId: string) => void;
   deleteShoppingItem: (itemId: string) => void;
   addMemory: (memory: Omit<Memory, 'id'>) => void;
+  updateMemory: (memoryId: string, updates: Partial<Memory>) => void;
   deleteMemory: (memoryId: string) => void;
   addPreparationTask: (task: Omit<PreparationTask, 'id'>) => void;
   updatePreparationTask: (taskId: string, updates: Partial<PreparationTask>) => void;
@@ -132,6 +143,7 @@ const sampleTrip1: Trip = {
   id: 'trip-1',
   tripName: '✈️ 【サンプル】2026 夏の北海道 家族旅行',
   tripDate: '2026-08-10T00:00:00Z',
+  participantsCount: 4,
   itineraryCategories: [
     {
       id: 'cat-1',
@@ -170,19 +182,19 @@ const sampleTrip1: Trip = {
     { id: generateId(), category: 'ホテル', icon: 'building', provider: '小樽グランドホテル', reference: 'HTL-777', details: 'ファミリールーム - 1泊', color: '#8b5cf6' }
   ],
   expenses: [
-    { id: generateId(), category: '飛行機代 (家族4人)', amount: 120000, color: '#3b82f6' },
-    { id: generateId(), category: 'レンタカー代', amount: 35000, color: '#10b981' },
-    { id: generateId(), category: 'ホテル宿泊費', amount: 40000, color: '#8b5cf6' }
+    { id: generateId(), category: '飛行機代 (家族4人)', amount: 120000, color: '#3b82f6', isPaid: true },
+    { id: generateId(), category: 'レンタカー代', amount: 35000, color: '#10b981', isPaid: false },
+    { id: generateId(), category: 'ホテル宿泊費', amount: 40000, color: '#8b5cf6', isPaid: false }
   ],
   packingList: [
-    { id: generateId(), name: '家族分のパスポート・航空券', isPacked: false, category: '重要' },
-    { id: generateId(), name: 'モバイルバッテリー', isPacked: true, category: 'ガジェット' },
-    { id: generateId(), name: '防寒着 (夜は冷えるため)', isPacked: false, category: '衣類' },
+    { id: generateId(), name: '家族分のパスポート・航空券', isPacked: false, category: '重要', assignee: 'パパ', quantity: 4 },
+    { id: generateId(), name: 'モバイルバッテリー', isPacked: true, category: 'ガジェット', assignee: 'ママ', quantity: 2 },
+    { id: generateId(), name: '防寒着 (夜は冷えるため)', isPacked: false, category: '衣類', quantity: 4 },
     { id: generateId(), name: '常備薬・酔い止め', isPacked: false, category: '日用品' }
   ],
   shoppingList: [
-    { id: generateId(), name: '職場用の白い恋人 3箱', isBought: false },
-    { id: generateId(), name: '両親へ海鮮セット', isBought: false }
+    { id: generateId(), name: '職場用の白い恋人 3箱', isBought: false, recipient: '職場', quantity: 3, budget: 3000 },
+    { id: generateId(), name: '両親へ海鮮セット', isBought: false, recipient: '両親', quantity: 1, budget: 10000 }
   ],
   memories: [],
   preparationTasks: [
@@ -204,8 +216,8 @@ export const useTravelStore = create<TravelStore>()(
         trips: [...state.trips, { ...trip, id: generateId(), itineraryCategories: [], bookings: [], expenses: [], packingList: [], shoppingList: [], memories: [], preparationTasks: [], wishlist: [] }]
       })),
 
-      updateTrip: (id, tripName, tripDate) => set((state) => ({
-        trips: state.trips.map(t => t.id === id ? { ...t, tripName, tripDate } : t)
+      updateTrip: (id, tripName, tripDate, participantsCount) => set((state) => ({
+        trips: state.trips.map(t => t.id === id ? { ...t, tripName, tripDate, participantsCount: participantsCount ?? t.participantsCount } : t)
       })),
 
       deleteTrip: (id) => set((state) => {
@@ -374,6 +386,17 @@ export const useTravelStore = create<TravelStore>()(
         };
       }),
 
+      toggleExpensePaid: (expenseId) => set((state) => {
+        if (!state.selectedTripId) return state;
+        return {
+          trips: state.trips.map(trip => 
+            trip.id === state.selectedTripId 
+              ? { ...trip, expenses: trip.expenses.map(e => e.id === expenseId ? { ...e, isPaid: !e.isPaid } : e) }
+              : trip
+          )
+        };
+      }),
+
       addPackingItem: (item) => set((state) => {
         if (!state.selectedTripId) return state;
         return {
@@ -446,6 +469,17 @@ export const useTravelStore = create<TravelStore>()(
           trips: state.trips.map(trip => 
             trip.id === state.selectedTripId 
               ? { ...trip, memories: [...(trip.memories || []), { ...memory, id: generateId() }] }
+              : trip
+          )
+        };
+      }),
+
+      updateMemory: (memoryId, updates) => set((state) => {
+        if (!state.selectedTripId) return state;
+        return {
+          trips: state.trips.map(trip => 
+            trip.id === state.selectedTripId 
+              ? { ...trip, memories: (trip.memories || []).map(m => m.id === memoryId ? { ...m, ...updates } : m) }
               : trip
           )
         };

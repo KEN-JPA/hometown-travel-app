@@ -59,6 +59,42 @@ export default function AIChatbot() {
       return;
     }
 
+    if (lower.includes('予定') || lower.includes('スケジュール') || lower.includes('今日') || lower.includes('明日')) {
+      const allEvents = selectedTrip.itineraryCategories.flatMap(cat => cat.schedules.flatMap(day => day.events));
+      if (allEvents.length === 0) {
+        reply('現在、登録されている予定はありません。「日程」画面から追加してください！');
+        return;
+      }
+      
+      const upcoming = allEvents.slice(0, 3).map(e => `・${e.time} ${e.title} (${e.location})`).join('\n');
+      reply(`予定ですね！登録されている最初の予定はこちらです：\n${upcoming}\n\n詳細は「日程」画面で確認できます。`);
+      return;
+    }
+
+    if (lower.includes('持ち物') || lower.includes('忘れ物') || lower.includes('準備')) {
+      const packing = selectedTrip.packingList || [];
+      const unpacked = packing.filter(p => !p.isPacked);
+      if (unpacked.length === 0) {
+        reply(packing.length === 0 ? '持ち物リストはまだ空のようです。「持物」画面から追加しましょう！' : '素晴らしいです！すべての持ち物の準備が完了しています。');
+        return;
+      }
+      const top3 = unpacked.slice(0, 3).map(p => `・${p.name} ${p.assignee ? `(担当: ${p.assignee})` : ''}`).join('\n');
+      reply(`まだ準備が終わっていない持ち物が ${unpacked.length} 個あります。例えば...\n${top3}\n\n「持物」画面でチェックしましょう！`);
+      return;
+    }
+
+    if (lower.includes('予算') || lower.includes('費用') || lower.includes('いくら') || lower.includes('お金')) {
+      const expenses = selectedTrip.expenses || [];
+      if (expenses.length === 0) {
+        reply('費用はまだ登録されていません。「費用」画面から追加できます。');
+        return;
+      }
+      const total = expenses.reduce((acc, curr) => acc + curr.amount, 0);
+      const paid = expenses.filter(e => e.isPaid).reduce((acc, curr) => acc + curr.amount, 0);
+      reply(`現在の予算・費用状況です。\n合計: ¥${total.toLocaleString()}\n支払済: ¥${paid.toLocaleString()}\n未払い: ¥${(total - paid).toLocaleString()}`);
+      return;
+    }
+
     if (lower.includes('チケット') && (lower.includes('出して') || lower.includes('見せて') || lower.includes('どこ'))) {
       if (lower.includes('飛行機') || lower.includes('航空券')) {
         searchTicket('飛行機');

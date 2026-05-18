@@ -12,6 +12,9 @@ export default function Shopping() {
   const addItem = useTravelStore((state) => state.addShoppingItem);
 
   const [newItemName, setNewItemName] = useState('');
+  const [newItemRecipient, setNewItemRecipient] = useState('');
+  const [newItemQuantity, setNewItemQuantity] = useState('1');
+  const [newItemBudget, setNewItemBudget] = useState('');
   const [isAdding, setIsAdding] = useState(false);
 
   if (!selectedTrip) {
@@ -23,12 +26,21 @@ export default function Shopping() {
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newItemName.trim()) return;
-    addItem({ name: newItemName });
+    addItem({ 
+      name: newItemName,
+      recipient: newItemRecipient || undefined,
+      quantity: parseInt(newItemQuantity, 10) || 1,
+      budget: parseInt(newItemBudget, 10) || undefined
+    });
     setNewItemName('');
+    setNewItemRecipient('');
+    setNewItemQuantity('1');
+    setNewItemBudget('');
     setIsAdding(false);
   };
 
   const progress = items.length > 0 ? Math.round((items.filter(i => i.isBought).length / items.length) * 100) : 0;
+  const totalBudget = items.reduce((acc, curr) => acc + (curr.budget || 0), 0);
 
   return (
     <div>
@@ -54,6 +66,11 @@ export default function Shopping() {
         <div style={{ width: '100%', height: '12px', background: 'var(--glass-bg)', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--glass-border)' }}>
           <div style={{ width: `${progress}%`, height: '100%', background: 'var(--accent-color)', transition: 'width 0.3s ease' }}></div>
         </div>
+        {totalBudget > 0 && (
+          <div className="mt-3 text-right text-sm font-bold text-slate-700">
+            予算合計: ¥{totalBudget.toLocaleString()}
+          </div>
+        )}
       </div>
 
       {isAdding && (
@@ -62,8 +79,8 @@ export default function Shopping() {
             <h3 className="font-bold text-slate-800">新しいお土産を追加</h3>
             <p className="text-xs text-slate-500 mt-1">誰に、何を買うかをメモしておきましょう。</p>
           </div>
-          <div>
-            <div className="text-xs font-bold text-slate-700 mb-1">お土産の内容</div>
+          <div className="mb-3">
+            <div className="text-xs font-bold text-slate-700 mb-1">お土産の内容（必須）</div>
             <input 
               type="text" 
               value={newItemName}
@@ -72,6 +89,40 @@ export default function Shopping() {
               className="input-field mb-0"
               autoFocus
               required
+            />
+          </div>
+          <div className="flex gap-2 mb-3">
+            <div style={{ flex: 1 }}>
+              <div className="text-xs font-bold text-slate-700 mb-1">渡す人（任意）</div>
+              <input 
+                type="text" 
+                value={newItemRecipient}
+                onChange={(e) => setNewItemRecipient(e.target.value)}
+                placeholder="例: 職場、両親" 
+                className="input-field mb-0"
+              />
+            </div>
+            <div style={{ width: '80px' }}>
+              <div className="text-xs font-bold text-slate-700 mb-1">数量</div>
+              <input 
+                type="number" 
+                min="1"
+                value={newItemQuantity}
+                onChange={(e) => setNewItemQuantity(e.target.value)}
+                className="input-field mb-0"
+              />
+            </div>
+          </div>
+          <div>
+            <div className="text-xs font-bold text-slate-700 mb-1">予算（任意）</div>
+            <input 
+              type="number" 
+              min="0"
+              step="100"
+              value={newItemBudget}
+              onChange={(e) => setNewItemBudget(e.target.value)}
+              placeholder="例: 3000" 
+              className="input-field mb-0"
             />
           </div>
           <div className="flex justify-end gap-2 mt-3">
@@ -98,9 +149,18 @@ export default function Shopping() {
               ) : (
                 <Square size={24} color="var(--text-secondary)" />
               )}
-              <span style={{ textDecoration: item.isBought ? 'line-through' : 'none', fontWeight: item.isBought ? 400 : 600, fontSize: '1.05rem' }}>
-                {item.name}
-              </span>
+              <div className="flex flex-col">
+                <span style={{ textDecoration: item.isBought ? 'line-through' : 'none', fontWeight: item.isBought ? 400 : 600, fontSize: '1.05rem' }}>
+                  {item.name}
+                </span>
+                {(item.recipient || item.quantity || item.budget) && (
+                  <div className="flex gap-2 mt-1 items-center flex-wrap">
+                    {item.recipient && <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">渡す人: {item.recipient}</span>}
+                    {item.quantity && item.quantity > 1 && <span className="text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full">x{item.quantity}</span>}
+                    {item.budget && <span className="text-xs bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full">予算: ¥{item.budget.toLocaleString()}</span>}
+                  </div>
+                )}
+              </div>
             </div>
             <button 
               onClick={() => deleteItem(item.id)}

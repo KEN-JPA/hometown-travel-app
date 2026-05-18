@@ -37,6 +37,7 @@ export default function Itinerary() {
   const [newEventTitle, setNewEventTitle] = useState('');
   const [newEventTime, setNewEventTime] = useState('');
   const [newEventLoc, setNewEventLoc] = useState('');
+  const [newEventIcon, setNewEventIcon] = useState<IconType>('map-pin');
 
   if (!selectedTrip) {
     return <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>旅行を選択してください</div>;
@@ -71,12 +72,13 @@ export default function Itinerary() {
       title: newEventTitle,
       time: newEventTime,
       location: newEventLoc,
-      icon: 'map-pin'
+      icon: newEventIcon
     });
     setAddingEventTo(null);
     setNewEventTitle('');
     setNewEventTime('');
     setNewEventLoc('');
+    setNewEventIcon('map-pin');
   };
 
   const handleUpdateEvent = (e: React.FormEvent, catId: string, dayId: string, eventId: string) => {
@@ -84,7 +86,8 @@ export default function Itinerary() {
     updateEvent(catId, dayId, eventId, {
       title: newEventTitle,
       time: newEventTime,
-      location: newEventLoc
+      location: newEventLoc,
+      icon: newEventIcon
     });
     setEditingEventId(null);
   };
@@ -93,6 +96,7 @@ export default function Itinerary() {
     setNewEventTitle(event.title);
     setNewEventTime(event.time);
     setNewEventLoc(event.location);
+    setNewEventIcon(event.icon || 'map-pin');
     setEditingEventId(event.id);
   };
 
@@ -140,9 +144,22 @@ export default function Itinerary() {
             </p>
           </div>
           <div className="flex flex-col gap-3">
-            <div>
-              <div className="text-xs font-bold text-slate-700 mb-1">開始時間（必須）</div>
-              <input type="time" className="input-field" style={{ marginBottom: 0 }} value={newEventTime} onChange={e => setNewEventTime(e.target.value)} required autoFocus />
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <div className="text-xs font-bold text-slate-700 mb-1">開始時間（必須）</div>
+                <input type="time" className="input-field" style={{ marginBottom: 0 }} value={newEventTime} onChange={e => setNewEventTime(e.target.value)} required autoFocus />
+              </div>
+              <div className="flex-1">
+                <div className="text-xs font-bold text-slate-700 mb-1">種類</div>
+                <select className="input-field" style={{ marginBottom: 0 }} value={newEventIcon} onChange={e => setNewEventIcon(e.target.value as IconType)}>
+                  <option value="plane">飛行機・新幹線</option>
+                  <option value="car">車・移動</option>
+                  <option value="map-pin">観光・その他</option>
+                  <option value="ticket">イベント・遊び</option>
+                  <option value="building">ホテル・宿</option>
+                  <option value="home">自宅</option>
+                </select>
+              </div>
             </div>
             <div>
               <div className="text-xs font-bold text-slate-700 mb-1">予定の内容（必須）</div>
@@ -226,8 +243,23 @@ export default function Itinerary() {
                             >
                               {editingEventId === event.id ? (
                                 <form onClick={e => e.stopPropagation()} onSubmit={(e) => handleUpdateEvent(e, cat.id, day.id, event.id)}>
-                                  <div className="text-xs font-bold text-slate-700 mb-1">時間</div>
-                                  <input type="time" className="input-field" style={{ marginBottom: '0.5rem' }} value={newEventTime} onChange={e => setNewEventTime(e.target.value)} required />
+                                  <div className="flex gap-2">
+                                    <div className="flex-1">
+                                      <div className="text-xs font-bold text-slate-700 mb-1">時間</div>
+                                      <input type="time" className="input-field" style={{ marginBottom: '0.5rem' }} value={newEventTime} onChange={e => setNewEventTime(e.target.value)} required />
+                                    </div>
+                                    <div className="flex-1">
+                                      <div className="text-xs font-bold text-slate-700 mb-1">種類</div>
+                                      <select className="input-field" style={{ marginBottom: '0.5rem' }} value={newEventIcon} onChange={e => setNewEventIcon(e.target.value as IconType)}>
+                                        <option value="plane">飛行機・新幹線</option>
+                                        <option value="car">車・移動</option>
+                                        <option value="map-pin">観光・その他</option>
+                                        <option value="ticket">イベント・遊び</option>
+                                        <option value="building">ホテル・宿</option>
+                                        <option value="home">自宅</option>
+                                      </select>
+                                    </div>
+                                  </div>
                                   <div className="text-xs font-bold text-slate-700 mb-1">予定の内容</div>
                                   <input type="text" className="input-field" style={{ marginBottom: '0.5rem' }} value={newEventTitle} onChange={e => setNewEventTitle(e.target.value)} required />
                                   <div className="text-xs font-bold text-slate-700 mb-1">場所</div>

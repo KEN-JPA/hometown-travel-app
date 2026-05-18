@@ -13,13 +13,17 @@ export default function PackingList() {
 
   const [newItemName, setNewItemName] = useState('');
   const [newItemCategory, setNewItemCategory] = useState('衣類');
+  const [newItemAssignee, setNewItemAssignee] = useState('');
+  const [newItemQuantity, setNewItemQuantity] = useState('1');
   const [isAdding, setIsAdding] = useState(false);
+  const [showUnpackedOnly, setShowUnpackedOnly] = useState(false);
 
   if (!selectedTrip) {
     return <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>旅行を選択してください</div>;
   }
 
-  const items = selectedTrip.packingList || [];
+  const allItems = selectedTrip.packingList || [];
+  const items = showUnpackedOnly ? allItems.filter(i => !i.isPacked) : allItems;
   
   // Group by category
   const groupedItems = items.reduce((acc, item) => {
@@ -31,12 +35,30 @@ export default function PackingList() {
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newItemName.trim()) return;
-    addItem({ name: newItemName, category: newItemCategory });
+    addItem({ 
+      name: newItemName, 
+      category: newItemCategory,
+      assignee: newItemAssignee || undefined,
+      quantity: parseInt(newItemQuantity, 10) || 1
+    });
     setNewItemName('');
+    setNewItemAssignee('');
+    setNewItemQuantity('1');
     setIsAdding(false);
   };
 
-  const progress = items.length > 0 ? Math.round((items.filter(i => i.isPacked).length / items.length) * 100) : 0;
+  const addTemplates = () => {
+    const templates = [
+      { name: 'パスポート', category: '重要', assignee: 'パパ', quantity: 1 },
+      { name: '航空券・チケット', category: '重要', assignee: 'パパ', quantity: 1 },
+      { name: 'スマートフォン充電器', category: 'ガジェット', assignee: 'ママ', quantity: 2 },
+      { name: '着替え（下着・靴下）', category: '衣類', assignee: '', quantity: 3 },
+      { name: '歯ブラシ・洗面用具', category: '日用品', assignee: '', quantity: 1 }
+    ];
+    templates.forEach(t => addItem(t));
+  };
+
+  const progress = allItems.length > 0 ? Math.round((allItems.filter(i => i.isPacked).length / allItems.length) * 100) : 0;
 
   return (
     <div>
@@ -45,13 +67,22 @@ export default function PackingList() {
           <h2 className="title">持ち物リスト</h2>
           <p className="subtitle">忘れ物を防ぎましょう</p>
         </div>
-        <button 
-          className="btn-primary" 
-          style={{ padding: '0.5rem 1rem', fontSize: '0.875rem' }}
-          onClick={() => setIsAdding(!isAdding)}
-        >
-          <Plus size={16} /> アイテム追加
-        </button>
+        <div className="flex gap-2">
+          <button 
+            className="btn-secondary" 
+            style={{ padding: '0.5rem 1rem', fontSize: '0.875rem' }}
+            onClick={() => setShowUnpackedOnly(!showUnpackedOnly)}
+          >
+            {showUnpackedOnly ? 'すべて表示' : '未準備のみ'}
+          </button>
+          <button 
+            className="btn-primary" 
+            style={{ padding: '0.5rem 1rem', fontSize: '0.875rem' }}
+            onClick={() => setIsAdding(!isAdding)}
+          >
+            <Plus size={16} /> 追加
+          </button>
+        </div>
       </div>
 
       <div className="glass-panel mb-6" style={{ padding: '1rem' }}>
@@ -98,6 +129,28 @@ export default function PackingList() {
               />
             </div>
           </div>
+          <div className="flex gap-2 mb-3">
+            <div style={{ flex: 1 }}>
+              <div className="text-xs font-bold text-slate-700 mb-1">担当（誰が持っていく？）</div>
+              <input 
+                type="text" 
+                value={newItemAssignee}
+                onChange={(e) => setNewItemAssignee(e.target.value)}
+                placeholder="例: パパ、ママ" 
+                style={{ width: '100%', padding: '0.6rem 0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)' }}
+              />
+            </div>
+            <div style={{ width: '80px' }}>
+              <div className="text-xs font-bold text-slate-700 mb-1">数量</div>
+              <input 
+                type="number" 
+                min="1"
+                value={newItemQuantity}
+                onChange={(e) => setNewItemQuantity(e.target.value)}
+                style={{ width: '100%', padding: '0.6rem 0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)' }}
+              />
+            </div>
+          </div>
           <div className="flex justify-end gap-2 pt-2">
             <button type="submit" className="btn-primary flex-1" style={{ padding: '0.5rem 1rem' }}>保存する</button>
             <button type="button" className="btn-secondary flex-1" onClick={() => setIsAdding(false)} style={{ padding: '0.5rem 1rem' }}>キャンセル</button>
@@ -130,6 +183,12 @@ export default function PackingList() {
                   <span style={{ textDecoration: item.isPacked ? 'line-through' : 'none', fontWeight: item.isPacked ? 400 : 500 }}>
                     {item.name}
                   </span>
+                  {(item.assignee || item.quantity) && (
+                    <div className="flex gap-2 ml-2">
+                      {item.assignee && <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">{item.assignee}</span>}
+                      {item.quantity && item.quantity > 1 && <span className="text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full">x{item.quantity}</span>}
+                    </div>
+                  )}
                 </div>
                 <button 
                   onClick={() => deleteItem(item.id)}
@@ -143,14 +202,17 @@ export default function PackingList() {
         </div>
       ))}
       
-      {items.length === 0 && !isAdding && (
+      {allItems.length === 0 && !isAdding && (
         <div className="glass-panel p-6 text-center text-slate-500 mt-6">
           <Package size={40} className="mx-auto mb-3 opacity-30 text-indigo-500" />
           <p className="font-bold text-slate-700 mb-1">持ち物リストが空です</p>
-          <p className="text-sm">
-            上の「アイテム追加」ボタンから、旅行に必要なものをリストアップしましょう。<br />
+          <p className="text-sm mb-4">
+            上の「追加」ボタンから、旅行に必要なものをリストアップしましょう。<br />
             まずは「パスポート」や「財布」など、絶対に忘れてはいけないものから追加するのがおすすめです！
           </p>
+          <button onClick={addTemplates} className="btn-secondary mx-auto">
+            <Plus size={16} /> 家族旅行の基本セットを追加
+          </button>
         </div>
       )}
     </div>

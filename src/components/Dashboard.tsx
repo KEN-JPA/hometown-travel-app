@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, ChevronRight, X, GripVertical } from 'lucide-react';
+import { Plus, ChevronRight, X, GripVertical, Download, Upload, Settings } from 'lucide-react';
 import { useTravelStore } from '../store';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
@@ -72,10 +72,14 @@ export default function Dashboard() {
   const [isAddingTrip, setIsAddingTrip] = useState(false);
   const [newTripName, setNewTripName] = useState('');
   const [newTripDate, setNewTripDate] = useState('');
+  const [newTripParticipants, setNewTripParticipants] = useState('1');
 
   const [isEditingTrip, setIsEditingTrip] = useState(false);
   const [editTripName, setEditTripName] = useState('');
   const [editTripDate, setEditTripDate] = useState('');
+  const [editTripParticipants, setEditTripParticipants] = useState('1');
+
+  const [showSettings, setShowSettings] = useState(false);
 
   // One-time fix to rename the old sample trip in existing local storage
   useEffect(() => {
@@ -94,24 +98,27 @@ export default function Dashboard() {
     if (!newTripName) return;
     addTrip({
       tripName: newTripName,
-      tripDate: newTripDate ? new Date(newTripDate).toISOString() : null
+      tripDate: newTripDate ? new Date(newTripDate).toISOString() : null,
+      participantsCount: parseInt(newTripParticipants, 10) || 1
     });
     setIsAddingTrip(false);
     setNewTripName('');
     setNewTripDate('');
+    setNewTripParticipants('1');
   };
 
   const openEdit = () => {
     if (!selectedTrip) return;
     setEditTripName(selectedTrip.tripName);
     setEditTripDate(selectedTrip.tripDate ? new Date(selectedTrip.tripDate).toISOString().split('T')[0] : '');
+    setEditTripParticipants((selectedTrip.participantsCount || 1).toString());
     setIsEditingTrip(true);
   };
 
   const handleEditTrip = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editTripName || !selectedTrip) return;
-    updateTrip(selectedTrip.id, editTripName, editTripDate ? new Date(editTripDate).toISOString() : null);
+    updateTrip(selectedTrip.id, editTripName, editTripDate ? new Date(editTripDate).toISOString() : null, parseInt(editTripParticipants, 10) || 1);
     setIsEditingTrip(false);
   };
 
@@ -123,15 +130,56 @@ export default function Dashboard() {
     }
   };
 
+  const handleExport = () => {
+    const data = JSON.stringify({ trips: useTravelStore.getState().trips }, null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `hometown-travel-data-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const json = JSON.parse(event.target?.result as string);
+        if (json.trips && Array.isArray(json.trips)) {
+          if (window.confirm('現在のデータを上書きしますか？（現在のデータは失われます）')) {
+            useTravelStore.setState({ trips: json.trips, selectedTripId: null });
+            alert('データをインポートしました。');
+            setShowSettings(false);
+          }
+        } else {
+          alert('無効なデータ形式です。');
+        }
+      } catch (err) {
+        alert('ファイルの読み込みに失敗しました。');
+      }
+    };
+    reader.readAsText(file);
+    // Reset input
+    e.target.value = '';
+  };
+
   // If no trip is selected, or if we want to show the trip list:
   if (!selectedTrip) {
     return (
       <div className="flex" style={{ flexDirection: 'column', gap: '1.25rem' }}>
         <div className="flex items-center justify-between mb-2">
           <h2 className="title">マイ旅行計画</h2>
-          <button onClick={() => setIsAddingTrip(true)} className="btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem' }}>
-            <Plus size={14} /> 新規作成
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setShowSettings(true)} className="btn-secondary" style={{ padding: '0.4rem', borderRadius: '50%', background: 'var(--glass-bg)', color: 'var(--text-secondary)' }}>
+              <Settings size={18} />
+            </button>
+            <button onClick={() => setIsAddingTrip(true)} className="btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem' }}>
+              <Plus size={14} /> 新規作成
+            </button>
+          </div>
         </div>
         
         <div className="flex" style={{ flexDirection: 'column', gap: '1rem' }}>
@@ -186,10 +234,56 @@ export default function Dashboard() {
                   <p className="text-xs text-slate-500 mt-1">日付を入れると、トップ画面で「あと何日」かカウントダウンされます！</p>
                 </div>
                 
+                <div className="mb-4">
+                  <label className="text-xs font-bold text-slate-700 mb-1 block">参加人数</label>
+                  <input 
+                    type="number" 
+                    min="1"
+                    className="input-field" 
+                    style={{ marginBottom: 0 }}
+                    value={newTripParticipants}
+                    onChange={e => setNewTripParticipants(e.target.value)}
+                  />
+                </div>
+                
                 <button type="submit" className="btn-primary" style={{ width: '100%', justifyContent: 'center', marginTop: '1rem' }}>
                   作成する
                 </button>
               </form>
+            </div>
+          </div>
+        )}
+
+        {showSettings && (
+          <div className="modal-overlay" onClick={() => setShowSettings(false)}>
+            <div className="modal-content" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4 border-b border-slate-200 pb-3">
+                <h3 className="flex items-center gap-2" style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>
+                  <Settings size={20} color="var(--accent-color)" /> データ保存・設定
+                </h3>
+                <button onClick={() => setShowSettings(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
+              </div>
+              
+              <div className="flex flex-col gap-4">
+                <div className="glass-panel p-4">
+                  <h4 className="font-bold text-slate-700 mb-2 flex items-center gap-2"><Download size={16} /> データのバックアップ (書き出し)</h4>
+                  <p className="text-xs text-slate-500 mb-3">
+                    現在の旅行データをJSONファイルとしてダウンロードします。家族に共有したり、バックアップとして保存できます。（※画像データは一部含まれない場合があります）
+                  </p>
+                  <button onClick={handleExport} className="btn-primary w-full justify-center">データをダウンロード</button>
+                </div>
+
+                <div className="glass-panel p-4">
+                  <h4 className="font-bold text-slate-700 mb-2 flex items-center gap-2"><Upload size={16} /> データの復元 (読み込み)</h4>
+                  <p className="text-xs text-slate-500 mb-3 text-red-500 font-medium">
+                    ⚠️ バックアップファイルを読み込みます。現在のデータはすべて上書きされ、元に戻せません。
+                  </p>
+                  <label className="btn-secondary w-full justify-center cursor-pointer text-center block">
+                    <input type="file" accept=".json" style={{ display: 'none' }} onChange={handleImport} />
+                    データファイルを読み込む
+                  </label>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -211,6 +305,18 @@ export default function Dashboard() {
   // Find next event (simplified for now)
   const firstCat = selectedTrip.itineraryCategories[0]?.schedules[0]?.events || [];
   const nextEvent = firstCat[0] || null;
+
+  // Calculate Dashboard Metrics
+  const uncompletedPrepTasks = (selectedTrip.preparationTasks || []).filter(t => t.status !== 'completed').length;
+  
+  const packingItems = selectedTrip.packingList || [];
+  const packingProgress = packingItems.length > 0 ? Math.round((packingItems.filter(i => i.isPacked).length / packingItems.length) * 100) : 0;
+  
+  const shoppingItems = selectedTrip.shoppingList || [];
+  const shoppingProgress = shoppingItems.length > 0 ? Math.round((shoppingItems.filter(i => i.isBought).length / shoppingItems.length) * 100) : 0;
+  
+  const totalBudget = (selectedTrip.expenses || []).reduce((acc, curr) => acc + curr.amount, 0);
+  const bookingCount = (selectedTrip.bookings || []).length;
 
   return (
     <div className="flex" style={{ flexDirection: 'column', gap: '1.25rem' }}>
@@ -291,6 +397,15 @@ export default function Dashboard() {
                 onChange={e => setEditTripDate(e.target.value)}
               />
               
+              <label className="input-label mt-3">参加人数</label>
+              <input 
+                type="number" 
+                min="1"
+                className="input-field" 
+                value={editTripParticipants}
+                onChange={e => setEditTripParticipants(e.target.value)}
+              />
+              
               <div className="flex gap-2" style={{ marginTop: '1rem' }}>
                 <button type="submit" className="btn-primary" style={{ flex: 1, justifyContent: 'center' }}>
                   更新する
@@ -304,27 +419,76 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Quick Status Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-        <div className="glass-card flex" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '0.75rem' }}>
-          <div style={{ padding: '0.5rem', background: 'rgba(59, 130, 246, 0.15)', borderRadius: '8px', fontSize: '1.5rem', lineHeight: 1 }}>
-            ☔
+      {/* Quick Status Cards / Dashboard */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+        
+        {/* Uncompleted Prep Tasks */}
+        <div className="glass-card flex" style={{ flexDirection: 'column', padding: '1rem' }}>
+          <div className="flex items-center gap-2 mb-2">
+            <div style={{ padding: '0.4rem', background: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger)', borderRadius: '8px' }}>📋</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600 }}>準備タスク</div>
           </div>
-          <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>現地の天気</div>
-            <div style={{ fontSize: '1.25rem', fontWeight: 600, fontFamily: 'Outfit' }}>24°C / 雨</div>
+          <div style={{ fontSize: '1.25rem', fontWeight: 700 }}>
+            {uncompletedPrepTasks > 0 ? (
+              <><span style={{ color: 'var(--danger)' }}>{uncompletedPrepTasks}</span>件 残り</>
+            ) : (
+              <span style={{ color: 'var(--success)', fontSize: '1rem' }}>すべて完了✨</span>
+            )}
           </div>
         </div>
         
-        <div className="glass-card flex" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '0.75rem' }}>
-          <div style={{ padding: '0.5rem', background: 'rgba(16, 185, 129, 0.15)', borderRadius: '8px', fontSize: '1.5rem', lineHeight: 1 }}>
-            🏨
+        {/* Total Budget */}
+        <div className="glass-card flex" style={{ flexDirection: 'column', padding: '1rem' }}>
+          <div className="flex items-center gap-2 mb-2">
+            <div style={{ padding: '0.4rem', background: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b', borderRadius: '8px' }}>💰</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600 }}>費用合計</div>
           </div>
-          <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>次のチェックイン</div>
-            <div style={{ fontSize: '1.1rem', fontWeight: 600, fontFamily: 'Outfit' }}>トヨタレンタカー</div>
+          <div style={{ fontSize: '1.25rem', fontWeight: 700, fontFamily: 'Outfit' }}>
+            ¥{totalBudget.toLocaleString()}
           </div>
         </div>
+
+        {/* Packing Progress */}
+        <div className="glass-card flex" style={{ flexDirection: 'column', padding: '1rem' }}>
+          <div className="flex items-center gap-2 mb-2">
+            <div style={{ padding: '0.4rem', background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6', borderRadius: '8px' }}>🎒</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600 }}>持ち物準備</div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div style={{ flex: 1, height: '6px', background: 'var(--glass-bg)', borderRadius: '3px', overflow: 'hidden' }}>
+              <div style={{ width: `${packingProgress}%`, height: '100%', background: '#3b82f6' }}></div>
+            </div>
+            <span style={{ fontSize: '0.875rem', fontWeight: 700, fontFamily: 'Outfit', width: '30px', textAlign: 'right' }}>{packingProgress}%</span>
+          </div>
+        </div>
+
+        {/* Shopping Progress */}
+        <div className="glass-card flex" style={{ flexDirection: 'column', padding: '1rem' }}>
+          <div className="flex items-center gap-2 mb-2">
+            <div style={{ padding: '0.4rem', background: 'rgba(139, 92, 246, 0.1)', color: '#8b5cf6', borderRadius: '8px' }}>🎁</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600 }}>お土産購入</div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div style={{ flex: 1, height: '6px', background: 'var(--glass-bg)', borderRadius: '3px', overflow: 'hidden' }}>
+              <div style={{ width: `${shoppingProgress}%`, height: '100%', background: '#8b5cf6' }}></div>
+            </div>
+            <span style={{ fontSize: '0.875rem', fontWeight: 700, fontFamily: 'Outfit', width: '30px', textAlign: 'right' }}>{shoppingProgress}%</span>
+          </div>
+        </div>
+        
+        {/* Booking Count */}
+        <div className="glass-card flex" style={{ flexDirection: 'column', padding: '1rem', gridColumn: '1 / -1' }}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div style={{ padding: '0.4rem', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', borderRadius: '8px' }}>🎟️</div>
+              <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', fontWeight: 600 }}>予約・チケット手配済み</div>
+            </div>
+            <div style={{ fontSize: '1.25rem', fontWeight: 700 }}>
+              {bookingCount}件
+            </div>
+          </div>
+        </div>
+
       </div>
 
       {/* Wishlist / 行きたいとこメモ Section */}

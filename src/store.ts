@@ -20,6 +20,7 @@ export interface DaySchedule {
 export interface TripCategory {
   id: string;
   name: string;
+  description?: string;
   schedules: DaySchedule[];
 }
 
@@ -41,6 +42,7 @@ export interface Expense {
   amount: number;
   color: string;
   isPaid?: boolean;
+  description?: string;
 }
 
 export interface PackingItem {
@@ -50,6 +52,7 @@ export interface PackingItem {
   category: string;
   assignee?: string;
   quantity?: number;
+  description?: string;
 }
 
 export interface ShoppingItem {
@@ -59,6 +62,7 @@ export interface ShoppingItem {
   recipient?: string;
   quantity?: number;
   budget?: number;
+  description?: string;
 }
 
 export interface Memory {
@@ -110,20 +114,28 @@ interface TravelStore {
   reorderTrips: (startIndex: number, endIndex: number) => void;
   // Methods below act on the selectedTripId
   addCategory: (category: Omit<TripCategory, 'id'>) => void;
+  updateCategory: (categoryId: string, name: string, description?: string) => void;
+  deleteCategory: (categoryId: string) => void;
   addDaySchedule: (categoryId: string, date: string) => void;
+  updateDaySchedule: (categoryId: string, dayId: string, date: string) => void;
+  deleteDaySchedule: (categoryId: string, dayId: string) => void;
   addEvent: (categoryId: string, dayId: string, event: Omit<Event, 'id'>) => void;
   updateEvent: (categoryId: string, dayId: string, eventId: string, updates: Partial<Event>) => void;
   deleteEvent: (categoryId: string, dayId: string, eventId: string) => void;
   addBooking: (booking: Omit<Booking, 'id'>) => void;
   deleteBooking: (bookingId: string) => void;
+  updateBooking: (bookingId: string, updates: Partial<Booking>) => void;
   updateBookingImage: (bookingId: string, imageKey: string) => void;
   addExpense: (expense: Omit<Expense, 'id'>) => void;
+  updateExpense: (expenseId: string, updates: Partial<Expense>) => void;
   deleteExpense: (expenseId: string) => void;
   toggleExpensePaid: (expenseId: string) => void;
   addPackingItem: (item: Omit<PackingItem, 'id' | 'isPacked'>) => void;
+  updatePackingItem: (itemId: string, updates: Partial<PackingItem>) => void;
   togglePackingItem: (itemId: string) => void;
   deletePackingItem: (itemId: string) => void;
   addShoppingItem: (item: Omit<ShoppingItem, 'id' | 'isBought'>) => void;
+  updateShoppingItem: (itemId: string, updates: Partial<ShoppingItem>) => void;
   toggleShoppingItem: (itemId: string) => void;
   deleteShoppingItem: (itemId: string) => void;
   addMemory: (memory: Omit<Memory, 'id'>) => void;
@@ -208,7 +220,7 @@ export const useTravelStore = create<TravelStore>()(
   persist(
     (set) => ({
       trips: [sampleTrip1],
-      selectedTripId: 'trip-1',
+      selectedTripId: null,
 
       selectTrip: (id) => set({ selectedTripId: id }),
 
@@ -246,6 +258,36 @@ export const useTravelStore = create<TravelStore>()(
         };
       }),
 
+      updateCategory: (categoryId, name, description) => set((state) => {
+        if (!state.selectedTripId) return state;
+        return {
+          trips: state.trips.map(trip => 
+            trip.id === state.selectedTripId 
+              ? {
+                  ...trip,
+                  itineraryCategories: trip.itineraryCategories.map(cat => 
+                    cat.id === categoryId ? { ...cat, name, description } : cat
+                  )
+                }
+              : trip
+          )
+        };
+      }),
+
+      deleteCategory: (categoryId) => set((state) => {
+        if (!state.selectedTripId) return state;
+        return {
+          trips: state.trips.map(trip => 
+            trip.id === state.selectedTripId 
+              ? {
+                  ...trip,
+                  itineraryCategories: trip.itineraryCategories.filter(cat => cat.id !== categoryId)
+                }
+              : trip
+          )
+        };
+      }),
+
       addDaySchedule: (categoryId, date) => set((state) => {
         if (!state.selectedTripId) return state;
         return {
@@ -258,6 +300,46 @@ export const useTravelStore = create<TravelStore>()(
                   ? { ...cat, schedules: [...cat.schedules, { id: generateId(), date, events: [] }] }
                   : cat
               )
+            };
+          })
+        };
+      }),
+
+      updateDaySchedule: (categoryId, dayId, date) => set((state) => {
+        if (!state.selectedTripId) return state;
+        return {
+          trips: state.trips.map(trip => {
+            if (trip.id !== state.selectedTripId) return trip;
+            return {
+              ...trip,
+              itineraryCategories: trip.itineraryCategories.map(cat => {
+                if (cat.id !== categoryId) return cat;
+                return {
+                  ...cat,
+                  schedules: cat.schedules.map(day => 
+                    day.id === dayId ? { ...day, date } : day
+                  )
+                };
+              })
+            };
+          })
+        };
+      }),
+
+      deleteDaySchedule: (categoryId, dayId) => set((state) => {
+        if (!state.selectedTripId) return state;
+        return {
+          trips: state.trips.map(trip => {
+            if (trip.id !== state.selectedTripId) return trip;
+            return {
+              ...trip,
+              itineraryCategories: trip.itineraryCategories.map(cat => {
+                if (cat.id !== categoryId) return cat;
+                return {
+                  ...cat,
+                  schedules: cat.schedules.filter(day => day.id !== dayId)
+                };
+              })
             };
           })
         };
@@ -351,6 +433,19 @@ export const useTravelStore = create<TravelStore>()(
         };
       }),
 
+      updateBooking: (bookingId, updates) => set((state) => {
+        if (!state.selectedTripId) return state;
+        return {
+          trips: state.trips.map(trip => {
+            if (trip.id !== state.selectedTripId) return trip;
+            return {
+              ...trip,
+              bookings: trip.bookings.map(b => b.id === bookingId ? { ...b, ...updates } : b)
+            };
+          })
+        };
+      }),
+
       updateBookingImage: (bookingId, imageKey) => set((state) => {
         if (!state.selectedTripId) return state;
         return {
@@ -372,6 +467,19 @@ export const useTravelStore = create<TravelStore>()(
               ? { ...trip, expenses: [...trip.expenses, { ...expense, id: generateId() }] }
               : trip
           )
+        };
+      }),
+
+      updateExpense: (expenseId, updates) => set((state) => {
+        if (!state.selectedTripId) return state;
+        return {
+          trips: state.trips.map(trip => {
+            if (trip.id !== state.selectedTripId) return trip;
+            return {
+              ...trip,
+              expenses: trip.expenses.map(e => e.id === expenseId ? { ...e, ...updates } : e)
+            };
+          })
         };
       }),
 
@@ -408,6 +516,19 @@ export const useTravelStore = create<TravelStore>()(
         };
       }),
 
+      updatePackingItem: (itemId, updates) => set((state) => {
+        if (!state.selectedTripId) return state;
+        return {
+          trips: state.trips.map(trip => {
+            if (trip.id !== state.selectedTripId) return trip;
+            return {
+              ...trip,
+              packingList: (trip.packingList || []).map(item => item.id === itemId ? { ...item, ...updates } : item)
+            };
+          })
+        };
+      }),
+
       togglePackingItem: (itemId) => set((state) => {
         if (!state.selectedTripId) return state;
         return {
@@ -438,6 +559,19 @@ export const useTravelStore = create<TravelStore>()(
               ? { ...trip, shoppingList: [...(trip.shoppingList || []), { ...item, isBought: false, id: generateId() }] }
               : trip
           )
+        };
+      }),
+
+      updateShoppingItem: (itemId, updates) => set((state) => {
+        if (!state.selectedTripId) return state;
+        return {
+          trips: state.trips.map(trip => {
+            if (trip.id !== state.selectedTripId) return trip;
+            return {
+              ...trip,
+              shoppingList: (trip.shoppingList || []).map(item => item.id === itemId ? { ...item, ...updates } : item)
+            };
+          })
         };
       }),
 

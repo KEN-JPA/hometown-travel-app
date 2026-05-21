@@ -1,19 +1,27 @@
 import React, { useState } from 'react';
-import { Plus, X } from 'lucide-react';
-import { useTravelStore } from '../store';
+import { Plus, Trash2, Edit2 } from 'lucide-react';
+import { useTravelStore, type Expense } from '../store';
 
 export default function Budget() {
   const trips = useTravelStore((state) => state.trips);
   const selectedTripId = useTravelStore((state) => state.selectedTripId);
   const selectedTrip = trips.find(t => t.id === selectedTripId);
   const addExpense = useTravelStore((state) => state.addExpense);
+  const updateExpense = useTravelStore((state) => state.updateExpense);
   const deleteExpense = useTravelStore((state) => state.deleteExpense);
   const toggleExpensePaid = useTravelStore((state) => state.toggleExpensePaid);
 
   const [isAdding, setIsAdding] = useState(false);
   const [newExpenseName, setNewExpenseName] = useState('');
   const [newExpenseAmount, setNewExpenseAmount] = useState('');
+  const [newExpenseDescription, setNewExpenseDescription] = useState('');
   
+  // 編集用の状態
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
+  const [editExpenseName, setEditExpenseName] = useState('');
+  const [editExpenseAmount, setEditExpenseAmount] = useState('');
+  const [editExpenseDescription, setEditExpenseDescription] = useState('');
+
   if (!selectedTrip) {
     return <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>旅行を選択してください</div>;
   }
@@ -34,12 +42,33 @@ export default function Budget() {
       category: newExpenseName,
       amount: parseInt(newExpenseAmount, 10),
       color,
-      isPaid: false
+      isPaid: false,
+      description: newExpenseDescription || undefined
     });
     
     setIsAdding(false);
     setNewExpenseName('');
     setNewExpenseAmount('');
+    setNewExpenseDescription('');
+  };
+
+  const startEditing = (exp: Expense) => {
+    setEditingExpenseId(exp.id);
+    setEditExpenseName(exp.category);
+    setEditExpenseAmount(exp.amount.toString());
+    setEditExpenseDescription(exp.description || '');
+  };
+
+  const handleUpdate = (e: React.FormEvent, expenseId: string) => {
+    e.preventDefault();
+    if (!editExpenseName.trim() || !editExpenseAmount.trim()) return;
+
+    updateExpense(expenseId, {
+      category: editExpenseName,
+      amount: parseInt(editExpenseAmount, 10),
+      description: editExpenseDescription || undefined
+    });
+    setEditingExpenseId(null);
   };
 
   return (
@@ -86,6 +115,16 @@ export default function Budget() {
                 required
               />
             </div>
+            <div>
+              <div className="text-xs font-bold text-slate-700 mb-1">メモ・詳細（任意）</div>
+              <textarea
+                placeholder="メモや詳細を入力"
+                className="input-field"
+                style={{ marginBottom: 0, minHeight: '60px' }}
+                value={newExpenseDescription}
+                onChange={(e) => setNewExpenseDescription(e.target.value)}
+              />
+            </div>
             <div className="flex gap-2 pt-2">
               <button type="submit" className="btn-primary flex-1">保存する</button>
               <button type="button" className="btn-secondary flex-1" onClick={() => setIsAdding(false)}>キャンセル</button>
@@ -110,40 +149,108 @@ export default function Budget() {
           </div>
         )}
       </div>
-
+      
       {/* Breakdown */}
       {expenses.length > 0 ? (
         <>
           <h3 className="title" style={{ fontSize: '1.1rem', marginBottom: '1rem' }}>内訳</h3>
           <div className="flex" style={{ flexDirection: 'column', gap: '0.75rem' }}>
-            {expenses.map((exp) => (
-              <div key={exp.id} className="glass-card flex items-center justify-between" style={{ padding: '1rem', opacity: exp.isPaid ? 0.7 : 1 }}>
-                <div className="flex items-center gap-3">
-                  <div style={{ width: '12px', height: '12px', borderRadius: '4px', background: exp.color }}></div>
-                  <div className="flex flex-col">
-                    <span style={{ fontWeight: 500, textDecoration: exp.isPaid ? 'line-through' : 'none' }}>{exp.category}</span>
-                    <label className="flex items-center gap-1 mt-1 cursor-pointer w-fit">
-                      <input 
-                        type="checkbox" 
-                        checked={exp.isPaid || false} 
-                        onChange={() => toggleExpensePaid(exp.id)}
-                        className="accent-emerald-500 w-3 h-3"
-                      />
-                      <span className="text-xs text-slate-500">{exp.isPaid ? '支払済' : '未払い'}</span>
-                    </label>
-                  </div>
+            {expenses.map((exp) => {
+              const isEditing = editingExpenseId === exp.id;
+              return (
+                <div key={exp.id} className="glass-card" style={{ padding: '1rem', opacity: exp.isPaid && !isEditing ? 0.7 : 1 }}>
+                  {isEditing ? (
+                    <form onSubmit={(e) => handleUpdate(e, exp.id)} className="space-y-3 w-full">
+                      <div className="flex gap-2">
+                        <div style={{ flex: 2 }}>
+                          <div className="text-xs font-bold text-slate-700 mb-1">費用の項目（必須）</div>
+                          <input 
+                            type="text" 
+                            value={editExpenseName}
+                            onChange={(e) => setEditExpenseName(e.target.value)}
+                            style={{ width: '100%', padding: '0.4rem 0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)', fontSize: '0.875rem' }}
+                            required
+                          />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div className="text-xs font-bold text-slate-700 mb-1">金額（円）</div>
+                          <input 
+                            type="number" 
+                            value={editExpenseAmount}
+                            onChange={(e) => setEditExpenseAmount(e.target.value)}
+                            style={{ width: '100%', padding: '0.4rem 0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)', fontSize: '0.875rem' }}
+                            required
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-700 mb-1">メモ・詳細（任意）</div>
+                        <textarea
+                          value={editExpenseDescription}
+                          onChange={(e) => setEditExpenseDescription(e.target.value)}
+                          style={{ width: '100%', padding: '0.4rem 0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)', fontSize: '0.875rem', minHeight: '50px' }}
+                          placeholder="詳細やメモを入力"
+                        />
+                      </div>
+                      <div className="flex gap-2 pt-1">
+                        <button type="submit" className="btn-primary flex-1 py-1.5 text-xs">保存</button>
+                        <button type="button" className="btn-secondary flex-1 py-1.5 text-xs" onClick={() => setEditingExpenseId(null)}>キャンセル</button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div className="flex flex-col w-full">
+                      <div className="flex items-center justify-between w-full">
+                        <div className="flex items-center gap-3">
+                          <div style={{ width: '12px', height: '12px', borderRadius: '4px', background: exp.color }}></div>
+                          <div className="flex flex-col">
+                            <span style={{ fontWeight: 500, textDecoration: exp.isPaid ? 'line-through' : 'none' }}>{exp.category}</span>
+                            <label className="flex items-center gap-1 mt-1 cursor-pointer w-fit">
+                              <input 
+                                type="checkbox" 
+                                checked={exp.isPaid || false} 
+                                onChange={() => toggleExpensePaid(exp.id)}
+                                className="accent-emerald-500 w-3 h-3"
+                              />
+                              <span className="text-xs text-slate-500">{exp.isPaid ? '支払済' : '未払い'}</span>
+                            </label>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span style={{ fontWeight: 600, fontFamily: 'Outfit', textDecoration: exp.isPaid ? 'line-through' : 'none' }}>¥{exp.amount.toLocaleString()}</span>
+                          <div className="flex gap-1 shrink-0 ml-2">
+                            <button 
+                              onClick={() => startEditing(exp)}
+                              style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '0.25rem' }}
+                              className="hover:text-indigo-600"
+                            >
+                              <Edit2 size={16} />
+                            </button>
+                            <button 
+                              onClick={() => {
+                                if (window.confirm(`${exp.category} を削除してもよろしいですか？`)) {
+                                  deleteExpense(exp.id);
+                                }
+                              }}
+                              style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '0.25rem' }}
+                              className="hover:text-rose-600"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      {exp.description && (
+                        <div className="mt-2 pl-6">
+                          <p className="text-xs text-slate-500 bg-slate-50 p-2 rounded whitespace-pre-wrap">
+                            {exp.description}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <div className="flex items-center gap-3">
-                  <span style={{ fontWeight: 600, fontFamily: 'Outfit', textDecoration: exp.isPaid ? 'line-through' : 'none' }}>¥{exp.amount.toLocaleString()}</span>
-                  <button 
-                    onClick={() => deleteExpense(exp.id)}
-                    style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex' }}
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </>
       ) : (

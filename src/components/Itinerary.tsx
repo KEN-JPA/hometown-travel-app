@@ -92,7 +92,7 @@ export default function Itinerary() {
     setEditingEventId(null);
   };
 
-  const startEditing = (catId: string, dayId: string, event: any) => {
+  const startEditing = (_catId: string, _dayId: string, event: any) => {
     setNewEventTitle(event.title);
     setNewEventTime(event.time);
     setNewEventLoc(event.location);

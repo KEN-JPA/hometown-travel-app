@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTravelStore } from '../store';
-import { CheckSquare, Square, Trash2, Plus, Package } from 'lucide-react';
+import { CheckSquare, Square, Trash2, Plus, Package, Edit2 } from 'lucide-react';
 
 export default function PackingList() {
   const trips = useTravelStore((state) => state.trips);
@@ -10,13 +10,23 @@ export default function PackingList() {
   const toggleItem = useTravelStore((state) => state.togglePackingItem);
   const deleteItem = useTravelStore((state) => state.deletePackingItem);
   const addItem = useTravelStore((state) => state.addPackingItem);
+  const updateItem = useTravelStore((state) => state.updatePackingItem);
 
   const [newItemName, setNewItemName] = useState('');
   const [newItemCategory, setNewItemCategory] = useState('衣類');
   const [newItemAssignee, setNewItemAssignee] = useState('');
   const [newItemQuantity, setNewItemQuantity] = useState('1');
+  const [newItemDescription, setNewItemDescription] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [showUnpackedOnly, setShowUnpackedOnly] = useState(false);
+
+  // 編集用の state
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editItemName, setEditItemName] = useState('');
+  const [editItemCategory, setEditItemCategory] = useState('衣類');
+  const [editItemAssignee, setEditItemAssignee] = useState('');
+  const [editItemQuantity, setEditItemQuantity] = useState('1');
+  const [editItemDescription, setEditItemDescription] = useState('');
 
   if (!selectedTrip) {
     return <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>旅行を選択してください</div>;
@@ -39,18 +49,42 @@ export default function PackingList() {
       name: newItemName, 
       category: newItemCategory,
       assignee: newItemAssignee || undefined,
-      quantity: parseInt(newItemQuantity, 10) || 1
+      quantity: parseInt(newItemQuantity, 10) || 1,
+      description: newItemDescription || undefined
     });
     setNewItemName('');
     setNewItemAssignee('');
     setNewItemQuantity('1');
+    setNewItemDescription('');
     setIsAdding(false);
+  };
+
+  const startEditing = (item: any) => {
+    setEditingItemId(item.id);
+    setEditItemName(item.name);
+    setEditItemCategory(item.category);
+    setEditItemAssignee(item.assignee || '');
+    setEditItemQuantity(item.quantity?.toString() || '1');
+    setEditItemDescription(item.description || '');
+  };
+
+  const handleUpdate = (e: React.FormEvent, itemId: string) => {
+    e.preventDefault();
+    if (!editItemName.trim()) return;
+    updateItem(itemId, {
+      name: editItemName,
+      category: editItemCategory,
+      assignee: editItemAssignee || undefined,
+      quantity: parseInt(editItemQuantity, 10) || 1,
+      description: editItemDescription || undefined
+    });
+    setEditingItemId(null);
   };
 
   const addTemplates = () => {
     const templates = [
-      { name: 'パスポート', category: '重要', assignee: 'パパ', quantity: 1 },
-      { name: '航空券・チケット', category: '重要', assignee: 'パパ', quantity: 1 },
+      { name: 'パスポート', category: '重要', assignee: 'パパ', quantity: 1, description: '有効期限が切れていないか要確認' },
+      { name: '航空券・チケット', category: '重要', assignee: 'パパ', quantity: 1, description: 'QRコードのスクショも用意しておく' },
       { name: 'スマートフォン充電器', category: 'ガジェット', assignee: 'ママ', quantity: 2 },
       { name: '着替え（下着・靴下）', category: '衣類', assignee: '', quantity: 3 },
       { name: '歯ブラシ・洗面用具', category: '日用品', assignee: '', quantity: 1 }
@@ -151,6 +185,15 @@ export default function PackingList() {
               />
             </div>
           </div>
+          <div className="mb-3">
+            <div className="text-xs font-bold text-slate-700 mb-1">メモ・詳細（任意）</div>
+            <textarea
+              value={newItemDescription}
+              onChange={(e) => setNewItemDescription(e.target.value)}
+              placeholder="例: 充電器は2個口以上のものが便利" 
+              style={{ width: '100%', padding: '0.6rem 0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)', minHeight: '60px' }}
+            />
+          </div>
           <div className="flex justify-end gap-2 pt-2">
             <button type="submit" className="btn-primary flex-1" style={{ padding: '0.5rem 1rem' }}>保存する</button>
             <button type="button" className="btn-secondary flex-1" onClick={() => setIsAdding(false)} style={{ padding: '0.5rem 1rem' }}>キャンセル</button>
@@ -164,40 +207,136 @@ export default function PackingList() {
             <Package size={16} /> {category}
           </h3>
           <div className="flex" style={{ flexDirection: 'column', gap: '0.5rem' }}>
-            {categoryItems.map(item => (
-              <div 
-                key={item.id} 
-                className="glass-card flex items-center justify-between" 
-                style={{ padding: '0.75rem 1rem', opacity: item.isPacked ? 0.6 : 1 }}
-              >
+            {categoryItems.map(item => {
+              const isEditing = editingItemId === item.id;
+              return (
                 <div 
-                  className="flex items-center gap-3" 
-                  style={{ cursor: 'pointer', flex: 1 }}
-                  onClick={() => toggleItem(item.id)}
+                  key={item.id} 
+                  className="glass-card" 
+                  style={{ padding: '0.75rem 1rem', opacity: item.isPacked && !isEditing ? 0.6 : 1 }}
                 >
-                  {item.isPacked ? (
-                    <CheckSquare size={20} color="var(--accent-color)" />
+                  {isEditing ? (
+                    <form onSubmit={(e) => handleUpdate(e, item.id)} className="space-y-3 w-full">
+                      <div className="flex gap-2">
+                        <div style={{ flex: '0 0 120px' }}>
+                          <div className="text-xs font-bold text-slate-700 mb-1">ジャンル</div>
+                          <select 
+                            value={editItemCategory}
+                            onChange={(e) => setEditItemCategory(e.target.value)}
+                            style={{ width: '100%', padding: '0.4rem 0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'white', fontSize: '0.875rem' }}
+                          >
+                            <option value="重要">重要書類</option>
+                            <option value="衣類">衣類</option>
+                            <option value="日用品">日用品</option>
+                            <option value="ガジェット">ガジェット</option>
+                            <option value="その他">その他</option>
+                          </select>
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div className="text-xs font-bold text-slate-700 mb-1">アイテム名</div>
+                          <input 
+                            type="text" 
+                            value={editItemName}
+                            onChange={(e) => setEditItemName(e.target.value)}
+                            style={{ width: '100%', padding: '0.4rem 0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)', fontSize: '0.875rem' }}
+                            required
+                          />
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <div style={{ flex: 1 }}>
+                          <div className="text-xs font-bold text-slate-700 mb-1">担当</div>
+                          <input 
+                            type="text" 
+                            value={editItemAssignee}
+                            onChange={(e) => setEditItemAssignee(e.target.value)}
+                            style={{ width: '100%', padding: '0.4rem 0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)', fontSize: '0.875rem' }}
+                            placeholder="例: パパ"
+                          />
+                        </div>
+                        <div style={{ width: '70px' }}>
+                          <div className="text-xs font-bold text-slate-700 mb-1">数量</div>
+                          <input 
+                            type="number" 
+                            min="1"
+                            value={editItemQuantity}
+                            onChange={(e) => setEditItemQuantity(e.target.value)}
+                            style={{ width: '100%', padding: '0.4rem 0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)', fontSize: '0.875rem' }}
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-700 mb-1">メモ・詳細</div>
+                        <textarea
+                          value={editItemDescription}
+                          onChange={(e) => setEditItemDescription(e.target.value)}
+                          style={{ width: '100%', padding: '0.4rem 0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)', fontSize: '0.875rem', minHeight: '50px' }}
+                          placeholder="メモを入力"
+                        />
+                      </div>
+                      <div className="flex gap-2 pt-1">
+                        <button type="submit" className="btn-primary flex-1 py-1.5 text-xs">保存</button>
+                        <button type="button" className="btn-secondary flex-1 py-1.5 text-xs" onClick={() => setEditingItemId(null)}>キャンセル</button>
+                      </div>
+                    </form>
                   ) : (
-                    <Square size={20} color="var(--text-secondary)" />
-                  )}
-                  <span style={{ textDecoration: item.isPacked ? 'line-through' : 'none', fontWeight: item.isPacked ? 400 : 500 }}>
-                    {item.name}
-                  </span>
-                  {(item.assignee || item.quantity) && (
-                    <div className="flex gap-2 ml-2">
-                      {item.assignee && <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">{item.assignee}</span>}
-                      {item.quantity && item.quantity > 1 && <span className="text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full">x{item.quantity}</span>}
+                    <div className="flex items-start justify-between w-full">
+                      <div className="flex-1 min-w-0">
+                        <div 
+                          className="flex items-start gap-3" 
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => toggleItem(item.id)}
+                        >
+                          <div className="mt-0.5 shrink-0">
+                            {item.isPacked ? (
+                              <CheckSquare size={20} color="var(--accent-color)" />
+                            ) : (
+                              <Square size={20} color="var(--text-secondary)" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <span style={{ textDecoration: item.isPacked ? 'line-through' : 'none', fontWeight: item.isPacked ? 400 : 500, wordBreak: 'break-all' }}>
+                              {item.name}
+                            </span>
+                            {(item.assignee || item.quantity) && (
+                              <div className="flex gap-2 mt-1">
+                                {item.assignee && <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">{item.assignee}</span>}
+                                {item.quantity && item.quantity > 1 && <span className="text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full">x{item.quantity}</span>}
+                              </div>
+                            )}
+                            {item.description && (
+                              <p className="text-xs text-slate-500 mt-2 bg-slate-50 p-2 rounded whitespace-pre-wrap">
+                                {item.description}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex gap-1 shrink-0 ml-2">
+                        <button 
+                          onClick={() => startEditing(item)}
+                          style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '0.25rem' }}
+                          className="hover:text-indigo-600"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        <button 
+                          onClick={() => {
+                            if (window.confirm(`${item.name} を削除してもよろしいですか？`)) {
+                              deleteItem(item.id);
+                            }
+                          }}
+                          style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '0.25rem' }}
+                          className="hover:text-rose-600"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
-                <button 
-                  onClick={() => deleteItem(item.id)}
-                  style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '0.25rem' }}
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       ))}

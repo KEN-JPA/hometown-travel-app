@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTravelStore } from '../store';
-import { Image as ImageIcon, Upload, Trash2, Camera } from 'lucide-react';
+import { Image as ImageIcon, Upload, Camera } from 'lucide-react';
 import { set, get, del } from 'idb-keyval';
 
 export default function Memories() {

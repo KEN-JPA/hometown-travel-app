@@ -169,7 +169,14 @@ export default function Preparation() {
                         <button onClick={() => startEditing(task)} className="text-slate-300 hover:text-indigo-400 p-1">
                           <Edit2 size={16} />
                         </button>
-                        <button onClick={() => deletePreparationTask(task.id)} className="text-slate-300 hover:text-rose-400 p-1">
+                        <button 
+                          onClick={() => {
+                            if (window.confirm('このタスクを削除してもよろしいですか？')) {
+                              deletePreparationTask(task.id);
+                            }
+                          }} 
+                          className="text-slate-300 hover:text-rose-400 p-1"
+                        >
                           <Trash2 size={16} />
                         </button>
                       </div>

@@ -17,7 +17,20 @@ const getIcon = (type: IconType) => {
 
 const BookingCard = ({ booking }: { booking: Booking }) => {
   const updateBookingImage = useTravelStore((state) => state.updateBookingImage);
+  const deleteBooking = useTravelStore((state) => state.deleteBooking);
+  const updateBooking = useTravelStore((state) => state.updateBooking);
+
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [showQR, setShowQR] = useState(false);
+
+  // 編集用の state
+  const [isEditing, setIsEditing] = useState(false);
+  const [editCategory, setEditCategory] = useState(booking.category);
+  const [editProvider, setEditProvider] = useState(booking.provider);
+  const [editReference, setEditReference] = useState(booking.reference);
+  const [editDetails, setEditDetails] = useState(booking.details);
+  const [editLink, setEditLink] = useState(booking.link || '');
+  const [editIcon, setEditIcon] = useState<IconType>(booking.icon);
 
   useEffect(() => {
     if (booking.imageKey) {
@@ -26,6 +39,15 @@ const BookingCard = ({ booking }: { booking: Booking }) => {
       });
     }
   }, [booking.imageKey]);
+
+  useEffect(() => {
+    setEditCategory(booking.category);
+    setEditProvider(booking.provider);
+    setEditReference(booking.reference);
+    setEditDetails(booking.details);
+    setEditLink(booking.link || '');
+    setEditIcon(booking.icon);
+  }, [booking]);
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -47,81 +69,154 @@ const BookingCard = ({ booking }: { booking: Booking }) => {
     reader.readAsDataURL(file);
   };
 
-  const [showQR, setShowQR] = useState(false);
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editCategory.trim() || !editProvider.trim()) return;
+    updateBooking(booking.id, {
+      category: editCategory,
+      provider: editProvider,
+      reference: editReference,
+      details: editDetails,
+      link: editLink || undefined,
+      icon: editIcon
+    });
+    setIsEditing(false);
+  };
 
-  const deleteBooking = useTravelStore((state) => state.deleteBooking);
   const Icon = getIcon(booking.icon);
 
   return (
     <>
       <div className="glass-panel" style={{ padding: '1.25rem' }}>
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <Icon size={20} color={booking.color} />
-            <span style={{ fontWeight: 600 }}>{booking.category}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button className="flex items-center gap-1" style={{ background: 'none', border: 'none', color: 'var(--accent-color)', fontSize: '0.875rem', cursor: 'pointer' }}>
-              詳細 <ExternalLink size={14} />
-            </button>
-            <button onClick={() => deleteBooking(booking.id)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}>
-              <X size={16} />
-            </button>
-          </div>
-        </div>
-        
-        <div style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '0.25rem' }}>
-          {booking.provider}
-        </div>
-        <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-          {booking.details}
-        </div>
-        
-        <div style={{ background: 'rgba(0,0,0,0.03)', padding: '0.75rem', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-          <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>予約番号</div>
-            <div style={{ fontFamily: 'monospace', fontSize: '1rem', letterSpacing: '1px' }}>{booking.reference}</div>
-          </div>
-          <button onClick={() => handleCopy(booking.reference)} style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', padding: '0.5rem', borderRadius: '6px', color: 'var(--text-primary)', cursor: 'pointer' }}>
-            <Copy size={16} />
-          </button>
-        </div>
-
-          {booking.link && (
-            <div style={{ marginTop: '0.5rem', marginBottom: '1rem' }}>
-              <a href={booking.link} target="_blank" rel="noopener noreferrer" className="btn-secondary" style={{ width: '100%', textDecoration: 'none' }}>
-                <ExternalLink size={16} /> デジタルチケットを開く
-              </a>
+        {isEditing ? (
+          <form onSubmit={handleSave} className="flex flex-col gap-3">
+            <div className="border-b border-slate-200 pb-2">
+              <h4 className="font-bold text-slate-800 text-sm">予約情報を編集</h4>
             </div>
-          )}
-
-        {/* Image / Screenshot Section */}
-        {imageUrl ? (
-          <div style={{ marginTop: '1rem' }}>
-            <button 
-              onClick={() => setShowQR(true)} 
-              className="btn-primary" 
-              style={{ width: '100%', marginBottom: '0.5rem', display: 'flex', justifyContent: 'center', gap: '0.5rem', padding: '0.75rem' }}
-            >
-              <Ticket size={18} /> QRコードを表示して使う
-            </button>
-            <div style={{ borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--glass-border)', position: 'relative' }}>
-              <img src={imageUrl} alt="予約の画像" style={{ width: '100%', height: '120px', objectFit: 'cover', opacity: 0.6, display: 'block' }} />
-              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-                <span style={{ background: 'rgba(0,0,0,0.5)', color: 'white', padding: '0.25rem 0.75rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 'bold' }}>画像プレビュー</span>
+            <div>
+              <div className="text-xs font-bold text-slate-700 mb-1">種類（例: 飛行機、ホテル、レンタカー、ツアー）</div>
+              <input type="text" className="input-field" style={{ marginBottom: 0, fontSize: '0.875rem' }} value={editCategory} onChange={e => setEditCategory(e.target.value)} required />
+            </div>
+            <div className="flex gap-2">
+              <div style={{ flex: '0 0 120px' }}>
+                <div className="text-xs font-bold text-slate-700 mb-1">アイコン</div>
+                <select 
+                  value={editIcon} 
+                  onChange={e => setEditIcon(e.target.value as IconType)}
+                  style={{ width: '100%', padding: '0.4rem 0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'white', fontSize: '0.875rem' }}
+                >
+                  <option value="plane">飛行機</option>
+                  <option value="car">レンタカー</option>
+                  <option value="home">一軒家・民宿</option>
+                  <option value="building">ホテル</option>
+                  <option value="ticket">チケット</option>
+                  <option value="map-pin">スポット</option>
+                </select>
+              </div>
+              <div style={{ flex: 1 }}>
+                <div className="text-xs font-bold text-slate-700 mb-1">会社名や便名・施設名</div>
+                <input type="text" className="input-field" style={{ marginBottom: 0, fontSize: '0.875rem' }} value={editProvider} onChange={e => setEditProvider(e.target.value)} required />
               </div>
             </div>
-            <label style={{ display: 'block', padding: '0.5rem', textAlign: 'center', background: 'rgba(0,0,0,0.03)', cursor: 'pointer', fontSize: '0.875rem', borderRadius: '0 0 8px 8px' }}>
-              <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} />
-              画像を変更する
-            </label>
-          </div>
+            <div>
+              <div className="text-xs font-bold text-slate-700 mb-1">予約番号・コード</div>
+              <input type="text" className="input-field" style={{ marginBottom: 0, fontSize: '0.875rem' }} value={editReference} onChange={e => setEditReference(e.target.value)} />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-slate-700 mb-1">詳細内容・メモ</div>
+              <textarea className="input-field" style={{ marginBottom: 0, fontSize: '0.875rem', minHeight: '60px' }} value={editDetails} onChange={e => setEditDetails(e.target.value)} />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-slate-700 mb-1">予約確認ページのURL</div>
+              <input type="url" className="input-field" style={{ marginBottom: 0, fontSize: '0.875rem' }} value={editLink} onChange={e => setEditLink(e.target.value)} />
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button type="submit" className="btn-primary flex-1 py-1.5 text-xs">保存</button>
+              <button type="button" className="btn-secondary flex-1 py-1.5 text-xs" onClick={() => setIsEditing(false)}>キャンセル</button>
+            </div>
+          </form>
         ) : (
-          <label className="glass-card flex items-center justify-center gap-2" style={{ width: '100%', cursor: 'pointer', padding: '0.75rem', background: 'rgba(16, 185, 129, 0.1)', color: 'var(--accent-color)', border: '1px dashed var(--accent-glow)' }}>
-            <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} />
-            <Upload size={16} />
-            <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>QRスクショを追加</span>
-          </label>
+          <>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Icon size={20} color={booking.color} />
+                <span style={{ fontWeight: 600 }}>{booking.category}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setIsEditing(true)} className="flex items-center gap-1" style={{ background: 'none', border: 'none', color: 'var(--accent-color)', fontSize: '0.875rem', cursor: 'pointer' }}>
+                  編集
+                </button>
+                <button 
+                  onClick={() => {
+                    if (window.confirm(`${booking.provider} の予約を削除してもよろしいですか？`)) {
+                      deleteBooking(booking.id);
+                    }
+                  }} 
+                  style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+            
+            <div style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '0.25rem' }}>
+              {booking.provider}
+            </div>
+            {booking.details && (
+              <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '1rem', whiteSpace: 'pre-wrap' }}>
+                {booking.details}
+              </div>
+            )}
+            
+            {booking.reference && (
+              <div style={{ background: 'rgba(0,0,0,0.03)', padding: '0.75rem', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <div className="flex-1">
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>予約番号</div>
+                  <div style={{ fontFamily: 'monospace', fontSize: '1rem', letterSpacing: '1px', wordBreak: 'break-all' }}>{booking.reference}</div>
+                </div>
+                <button onClick={() => handleCopy(booking.reference)} style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', padding: '0.5rem', borderRadius: '6px', color: 'var(--text-primary)', cursor: 'pointer' }}>
+                  <Copy size={16} />
+                </button>
+              </div>
+            )}
+
+            {booking.link && (
+              <div style={{ marginTop: '0.5rem', marginBottom: '1rem' }}>
+                <a href={booking.link} target="_blank" rel="noopener noreferrer" className="btn-secondary" style={{ width: '100%', textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                  <ExternalLink size={16} /> デジタルチケットを開く
+                </a>
+              </div>
+            )}
+
+            {/* Image / Screenshot Section */}
+            {imageUrl ? (
+              <div style={{ marginTop: '1rem' }}>
+                <button 
+                  onClick={() => setShowQR(true)} 
+                  className="btn-primary" 
+                  style={{ width: '100%', marginBottom: '0.5rem', display: 'flex', justifyContent: 'center', gap: '0.5rem', padding: '0.75rem' }}
+                >
+                  <Ticket size={18} /> QRコードを表示して使う
+                </button>
+                <div style={{ borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--glass-border)', position: 'relative' }}>
+                  <img src={imageUrl} alt="予約の画像" style={{ width: '100%', height: '120px', objectFit: 'cover', opacity: 0.6, display: 'block' }} />
+                  <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                    <span style={{ background: 'rgba(0,0,0,0.5)', color: 'white', padding: '0.25rem 0.75rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 'bold' }}>画像プレビュー</span>
+                  </div>
+                </div>
+                <label style={{ display: 'block', padding: '0.5rem', textAlign: 'center', background: 'rgba(0,0,0,0.03)', cursor: 'pointer', fontSize: '0.875rem', borderRadius: '0 0 8px 8px' }}>
+                  <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} />
+                  画像を変更する
+                </label>
+              </div>
+            ) : (
+              <label className="glass-card flex items-center justify-center gap-2" style={{ width: '100%', cursor: 'pointer', padding: '0.75rem', background: 'rgba(16, 185, 129, 0.1)', color: 'var(--accent-color)', border: '1px dashed var(--accent-glow)' }}>
+                <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} />
+                <Upload size={16} />
+                <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>QRスクショを追加</span>
+              </label>
+            )}
+          </>
         )}
       </div>
 
@@ -189,6 +284,8 @@ export default function Bookings() {
   const [newProvider, setNewProvider] = useState('');
   const [newRef, setNewRef] = useState('');
   const [newLink, setNewLink] = useState('');
+  const [newDetails, setNewDetails] = useState('');
+  const [newIcon, setNewIcon] = useState<IconType>('ticket');
 
   if (!selectedTrip) {
     return <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>旅行を選択してください</div>;
@@ -204,8 +301,8 @@ export default function Bookings() {
       provider: newProvider,
       reference: newRef,
       link: newLink,
-      details: '手動追加',
-      icon: 'ticket',
+      details: newDetails || '手動追加',
+      icon: newIcon,
       color: '#3b82f6'
     });
     setIsAdding(false);
@@ -213,6 +310,8 @@ export default function Bookings() {
     setNewProvider('');
     setNewRef('');
     setNewLink('');
+    setNewDetails('');
+    setNewIcon('ticket');
   };
 
   return (
@@ -240,13 +339,34 @@ export default function Bookings() {
               <div className="text-xs font-bold text-slate-700 mb-1">種類（必須）</div>
               <input type="text" placeholder="例: 飛行機、ホテル、レンタカー、ツアー" className="input-field" style={{ marginBottom: 0 }} value={newCat} onChange={e => setNewCat(e.target.value)} required autoFocus />
             </div>
-            <div>
-              <div className="text-xs font-bold text-slate-700 mb-1">会社名や便名・施設名（必須）</div>
-              <input type="text" placeholder="例: ANA 051便、〇〇ホテル" className="input-field" style={{ marginBottom: 0 }} value={newProvider} onChange={e => setNewProvider(e.target.value)} required />
+            <div className="flex gap-2">
+              <div style={{ flex: '0 0 140px' }}>
+                <div className="text-xs font-bold text-slate-700 mb-1">アイコン</div>
+                <select 
+                  value={newIcon} 
+                  onChange={e => setNewIcon(e.target.value as IconType)}
+                  style={{ width: '100%', padding: '0.6rem 0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'white' }}
+                >
+                  <option value="plane">飛行機</option>
+                  <option value="car">レンタカー</option>
+                  <option value="home">一軒家・民宿</option>
+                  <option value="building">ホテル</option>
+                  <option value="ticket">チケット</option>
+                  <option value="map-pin">スポット</option>
+                </select>
+              </div>
+              <div style={{ flex: 1 }}>
+                <div className="text-xs font-bold text-slate-700 mb-1">会社名や便名・施設名（必須）</div>
+                <input type="text" placeholder="例: ANA 051便、〇〇ホテル" className="input-field" style={{ marginBottom: 0 }} value={newProvider} onChange={e => setNewProvider(e.target.value)} required />
+              </div>
             </div>
             <div>
               <div className="text-xs font-bold text-slate-700 mb-1">予約番号（あると便利！）</div>
               <input type="text" placeholder="例: AB123456" className="input-field" style={{ marginBottom: 0 }} value={newRef} onChange={e => setNewRef(e.target.value)} />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-slate-700 mb-1">詳細内容・メモ（任意）</div>
+              <textarea placeholder="例: チェックイン15:00、朝食付き、ファミリールーム" className="input-field" style={{ marginBottom: 0, minHeight: '60px' }} value={newDetails} onChange={e => setNewDetails(e.target.value)} />
             </div>
             <div>
               <div className="text-xs font-bold text-slate-700 mb-1">予約確認ページのURL（任意）</div>

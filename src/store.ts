@@ -767,6 +767,7 @@ export const useTravelStore = create<TravelStore>()(
     {
       name: 'hometown-trip-storage',
       storage: createJSONStorage(() => kvStorage),
+      partialize: (state) => ({ trips: state.trips }),
     }
   )
 );

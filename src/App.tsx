@@ -159,6 +159,11 @@ function Layout({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
+  // アプリ起動（マウント）時に必ず選択状態をクリアして旅行一覧（トップ）を表示する
+  useEffect(() => {
+    useTravelStore.getState().selectTrip(null);
+  }, []);
+
   // 5秒おきにサーバーから最新データを取得して同期する (リアルタイム共有)
   useEffect(() => {
     const interval = setInterval(async () => {

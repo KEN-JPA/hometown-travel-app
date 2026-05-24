@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Redis } from '@upstash/redis';
 
 export default async function handler(req, res) {

@@ -8,8 +8,8 @@ export default async function handler(req, res) {
 
   try {
     const redis = new Redis({
-      url: process.env.KV_REST_API_URL || '',
-      token: process.env.KV_REST_API_TOKEN || '',
+      url: process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || '',
+      token: process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || '',
     });
 
     const data = req.body;
@@ -18,8 +18,12 @@ export default async function handler(req, res) {
     await redis.set('family_travel_state', data);
     
     return res.status(200).json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to save trips:', error);
-    return res.status(500).json({ error: 'Failed to save data' });
+    return res.status(500).json({ 
+      error: 'Failed to save data',
+      message: error.message,
+      stack: error.stack
+    });
   }
 }

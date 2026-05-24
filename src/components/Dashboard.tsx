@@ -91,34 +91,36 @@ export default function Dashboard() {
   const [settingsTab, setSettingsTab] = useState<'local' | 'google'>('local');
 
   const handleGoogleDriveSync = () => {
-    if (!googleClientId) {
+    const cleanClientId = googleClientId.trim();
+    if (!cleanClientId) {
       alert('Google API クライアントIDを設定してください。');
       return;
     }
     
-    setIsSyncing(true);
-    
     if (typeof (window as any).google === 'undefined') {
       alert('Google APIのロードに失敗しました。ページをリロードしてもう一度お試しください。');
-      setIsSyncing(false);
       return;
     }
 
     try {
       const client = (window as any).google.accounts.oauth2.initTokenClient({
-        client_id: googleClientId,
+        client_id: cleanClientId,
         scope: 'https://www.googleapis.com/auth/drive.file',
         callback: async (response: any) => {
           if (response.error) {
             console.error('OAuth Error:', response);
             alert('ログインに失敗しました: ' + response.error);
-            setIsSyncing(false);
             return;
           }
 
-          const accessToken = response.access_token;
-          setDriveToken(accessToken);
-          await performDriveSync(accessToken);
+          setIsSyncing(true);
+          try {
+            const accessToken = response.access_token;
+            setDriveToken(accessToken);
+            await performDriveSync(accessToken);
+          } finally {
+            setIsSyncing(false);
+          }
         },
       });
 
@@ -126,7 +128,6 @@ export default function Dashboard() {
     } catch (err: any) {
       console.error(err);
       alert('同期処理の開始に失敗しました: ' + err.message);
-      setIsSyncing(false);
     }
   };
 
@@ -642,14 +643,38 @@ export default function Dashboard() {
                       />
                     </div>
 
+                    {!googleClientId.trim() && (
+                      <div className="mb-3 p-2.5 rounded-lg text-xs" style={{ background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.15)', color: '#ef4444', lineHeight: 1.4 }}>
+                        ⚠️ 同期を開始するには、Google OAuth クライアントIDを入力する必要があります。
+                      </div>
+                    )}
+
                     <button 
                       onClick={handleGoogleDriveSync} 
                       className="btn-primary w-full justify-center flex items-center gap-2 py-2.5 text-xs" 
-                      style={{ background: '#3b82f6', color: 'white' }}
-                      disabled={!googleClientId || isSyncing}
+                      style={{ 
+                        background: (!googleClientId.trim() || isSyncing) ? '#e2e8f0' : '#3b82f6', 
+                        color: (!googleClientId.trim() || isSyncing) ? '#94a3b8' : 'white',
+                        cursor: (!googleClientId.trim() || isSyncing) ? 'not-allowed' : 'pointer',
+                        boxShadow: (!googleClientId.trim() || isSyncing) ? 'none' : '0 4px 12px rgba(59, 130, 246, 0.2)'
+                      }}
+                      disabled={!googleClientId.trim() || isSyncing}
                     >
                       {isSyncing ? '同期処理中...' : 'Google ドライブと同期する'}
                     </button>
+
+                    <details className="mt-3 text-slate-500" style={{ fontSize: '0.7rem' }}>
+                      <summary className="cursor-pointer font-bold hover:text-slate-700" style={{ listStyle: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <span>💡</span> OAuth クライアントIDの取得手順
+                      </summary>
+                      <div className="mt-2 pl-2 border-l-2 border-slate-200 flex flex-col gap-1.5" style={{ lineHeight: 1.4 }}>
+                        <p>1. <a href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6', textDecoration: 'underline' }}>Google Cloud Console</a> にログインします。</p>
+                        <p>2. プロジェクトを作成し、<strong>「APIs & Services」 &gt; 「OAuth consent screen」</strong>で外部アプリとして同意画面を設定します。</p>
+                        <p>3. <strong>「Credentials」</strong>画面で、<strong>「Create Credentials」 &gt; 「OAuth client ID」</strong>を選択し、アプリケーションの種類を「ウェブ アプリケーション」にします。</p>
+                        <p>4. <strong>「承認済みの JavaScript 生成元」</strong>に <code>https://hometown-travel-app.vercel.app</code> (ローカル開発時は <code>http://localhost:5173</code> も) を追加します。</p>
+                        <p>5. 発行されたクライアントID（<code>.apps.googleusercontent.com</code> で終わるもの）をコピーして、上の入力欄に貼り付けてください。</p>
+                      </div>
+                    </details>
                   </div>
                 )}
               </div>

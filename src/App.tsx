@@ -159,10 +159,53 @@ function Layout({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
+  const _hasHydrated = useTravelStore((state) => state._hasHydrated);
+
   // アプリ起動（マウント）時に必ず選択状態をクリアして旅行一覧（トップ）を表示する
   useEffect(() => {
-    useTravelStore.getState().selectTrip(null);
-  }, []);
+    if (_hasHydrated) {
+      useTravelStore.getState().selectTrip(null);
+    }
+  }, [_hasHydrated]);
+
+  if (!_hasHydrated) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)',
+        color: '#f8fafc',
+        fontFamily: '"M PLUS Rounded 1c", sans-serif',
+        padding: '2rem',
+        textAlign: 'center'
+      }}>
+        <div style={{
+          width: '64px',
+          height: '64px',
+          border: '4px solid rgba(99, 102, 241, 0.2)',
+          borderTop: '4px solid #6366f1',
+          borderRadius: '50%',
+          animation: 'spin 1s linear infinite',
+          marginBottom: '2rem'
+        }} />
+        <style dangerouslySetInnerHTML={{__html: `
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}} />
+        <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.5rem', letterSpacing: '1px' }}>
+          TRIP BASE
+        </h2>
+        <p style={{ color: '#94a3b8', fontSize: '0.875rem' }}>
+          思い出データを同期中...
+        </p>
+      </div>
+    );
+  }
 
   // 5秒おきにサーバーから最新データを取得して同期する (リアルタイム共有)
   useEffect(() => {

@@ -160,6 +160,8 @@ h1, h2, h3, h4, h5, h6 {
   padding: 1.5rem;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
   animation: modalSlideUp 0.3s ease-out;
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
 @keyframes modalSlideUp {

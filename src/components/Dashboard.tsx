@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, ChevronRight, X, GripVertical, Download, Upload, Settings } from 'lucide-react';
 import { useTravelStore } from '../store';
+import { get, set, del } from 'idb-keyval';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+
 import type { DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -46,11 +48,14 @@ function SortableTripItem({ trip, onSelect }: { trip: any, onSelect: (id: string
 
 export default function Dashboard() {
   const trips = useTravelStore((state) => state.trips);
+  const deletedTrips = useTravelStore((state) => state.deletedTrips || []);
   const selectedTripId = useTravelStore((state) => state.selectedTripId);
   const selectTrip = useTravelStore((state) => state.selectTrip);
   const addTrip = useTravelStore((state) => state.addTrip);
   const updateTrip = useTravelStore((state) => state.updateTrip);
   const deleteTrip = useTravelStore((state) => state.deleteTrip);
+  const restoreTrip = useTravelStore((state) => state.restoreTrip);
+  const permanentlyDeleteTrip = useTravelStore((state) => state.permanentlyDeleteTrip);
   const reorderTrips = useTravelStore((state) => state.reorderTrips);
   const addWishlistItem = useTravelStore((state) => state.addWishlistItem);
   const deleteWishlistItem = useTravelStore((state) => state.deleteWishlistItem);
@@ -80,6 +85,300 @@ export default function Dashboard() {
   const [editTripParticipants, setEditTripParticipants] = useState('1');
 
   const [showSettings, setShowSettings] = useState(false);
+  const [googleClientId, setGoogleClientId] = useState(localStorage.getItem('google_drive_client_id') || '');
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [driveToken, setDriveToken] = useState<string | null>(null);
+  const [settingsTab, setSettingsTab] = useState<'local' | 'google'>('local');
+
+  const handleGoogleDriveSync = () => {
+    if (!googleClientId) {
+      alert('Google API クライアントIDを設定してください。');
+      return;
+    }
+    
+    setIsSyncing(true);
+    
+    if (typeof (window as any).google === 'undefined') {
+      alert('Google APIのロードに失敗しました。ページをリロードしてもう一度お試しください。');
+      setIsSyncing(false);
+      return;
+    }
+
+    try {
+      const client = (window as any).google.accounts.oauth2.initTokenClient({
+        client_id: googleClientId,
+        scope: 'https://www.googleapis.com/auth/drive.file',
+        callback: async (response: any) => {
+          if (response.error) {
+            console.error('OAuth Error:', response);
+            alert('ログインに失敗しました: ' + response.error);
+            setIsSyncing(false);
+            return;
+          }
+
+          const accessToken = response.access_token;
+          setDriveToken(accessToken);
+          await performDriveSync(accessToken);
+        },
+      });
+
+      client.requestAccessToken();
+    } catch (err: any) {
+      console.error(err);
+      alert('同期処理の開始に失敗しました: ' + err.message);
+      setIsSyncing(false);
+    }
+  };
+
+  const performDriveSync = async (token: string) => {
+    try {
+      const searchRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q=name='TRIP_BASE_BACKUP.json' and trashed=false&fields=files(id,name,modifiedTime)`,
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      );
+      
+      if (!searchRes.ok) throw new Error('ドライブの検索に失敗しました');
+      const searchData = await searchRes.json();
+      const existingFile = searchData.files?.[0];
+
+      // Google ドライブにアップロードするためのマージデータを非同期で収集
+      const currentTrips = useTravelStore.getState().trips;
+      const deletedTrips = useTravelStore.getState().deletedTrips || [];
+
+      // 全旅行データから imageKey をスキャンして収集
+      const imageKeys = new Set<string>();
+      const allTrips = [...currentTrips, ...deletedTrips];
+      for (const trip of allTrips) {
+        if (trip.preparationTasks) {
+          for (const task of trip.preparationTasks) {
+            if (task.imageKey) imageKeys.add(task.imageKey);
+          }
+        }
+        if (trip.bookings) {
+          for (const booking of trip.bookings) {
+            if (booking.imageKey) imageKeys.add(booking.imageKey);
+          }
+        }
+        if (trip.memories) {
+          for (const memory of trip.memories) {
+            if (memory.imageKey) imageKeys.add(memory.imageKey);
+          }
+        }
+      }
+
+      // IndexedDB (idb-keyval) から画像データ本体を一括取得
+      const images: Record<string, string> = {};
+      for (const key of imageKeys) {
+        const data = await get(key);
+        if (data) {
+          images[key] = data as string;
+        }
+      }
+
+      // trips, deletedTrips, images を丸ごと含めた完全なバックアップデータを作成
+      const backupData = JSON.stringify({ trips: currentTrips, deletedTrips, images }, null, 2);
+
+      if (existingFile) {
+        const fileId = existingFile.id;
+        const confirmRestore = window.confirm(
+          `Googleドライブ上にバックアップが見つかりました。\n\n[OK] -> ドライブからデータを復元（画像やゴミ箱、現在のデータはすべて上書きされます）\n[キャンセル] -> 現在の全データ（画像やゴミ箱含む）をドライブへバックアップ`
+        );
+
+        if (confirmRestore) {
+          const downloadRes = await fetch(
+            `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+            {
+              headers: { Authorization: `Bearer ${token}` }
+            }
+          );
+          if (!downloadRes.ok) throw new Error('バックアップデータのダウンロードに失敗しました');
+          const data = await downloadRes.json();
+          
+          if (data && data.trips && Array.isArray(data.trips)) {
+            // 画像データを IndexedDB (idb-keyval) へ一括書き戻し（復元）
+            if (data.images) {
+              for (const [key, value] of Object.entries(data.images)) {
+                await set(key, value as string);
+              }
+            }
+            // ストア（trips, deletedTrips）を復元
+            useTravelStore.setState({ 
+              trips: data.trips, 
+              deletedTrips: data.deletedTrips || [], 
+              selectedTripId: null 
+            });
+            alert('🎉 Google ドライブから旅行データ・ゴミ箱・すべての画像を正常に復元しました！');
+            setShowSettings(false);
+          } else {
+            alert('無効なデータ形式です。復元できませんでした。');
+          }
+        } else {
+          const updateRes = await fetch(
+            `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,
+            {
+              method: 'PATCH',
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              },
+              body: backupData
+            }
+          );
+          if (!updateRes.ok) throw new Error('データのバックアップアップロードに失敗しました');
+          alert('💾 Google ドライブへ画像・ゴミ箱を含む完全バックアップを保存しました！');
+          setShowSettings(false);
+        }
+      } else {
+        alert('Google ドライブ上にバックアップファイルが見つかりません。新規作成して保存します。');
+        
+        const createMetaRes = await fetch(
+          'https://www.googleapis.com/drive/v3/files',
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              name: 'TRIP_BASE_BACKUP.json',
+              mimeType: 'application/json'
+            })
+          }
+        );
+        if (!createMetaRes.ok) throw new Error('メタデータの作成に失敗しました');
+        const fileMeta = await createMetaRes.json();
+        const fileId = fileMeta.id;
+
+        const uploadRes = await fetch(
+          `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,
+          {
+            method: 'PATCH',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: backupData
+          }
+        );
+        if (!uploadRes.ok) throw new Error('データのアップロードに失敗しました');
+        alert('💾 Google ドライブへ画像・ゴミ箱を含む新しい完全バックアップを作成・保存しました！');
+        setShowSettings(false);
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert('エラーが発生しました: ' + err.message);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handlePermanentlyDelete = async (trip: any) => {
+    if (!window.confirm(`「${trip.tripName}」を完全に削除しますか？\nこの操作は取り消せず、バックアップデータや画像データからもすべて抹消されます。`)) {
+      return;
+    }
+
+    try {
+      // 1. ローカル IndexedDB から関連画像を削除
+      const imageKeys: string[] = [];
+      if (trip.preparationTasks) {
+        for (const task of trip.preparationTasks) {
+          if (task.imageKey) imageKeys.push(task.imageKey);
+        }
+      }
+      if (trip.bookings) {
+        for (const booking of trip.bookings) {
+          if (booking.imageKey) imageKeys.push(booking.imageKey);
+        }
+      }
+      if (trip.memories) {
+        for (const memory of trip.memories) {
+          if (memory.imageKey) imageKeys.push(memory.imageKey);
+        }
+      }
+
+      for (const key of imageKeys) {
+        await del(key);
+      }
+
+      // 2. Zustand ストア（および Redis）から完全削除
+      permanentlyDeleteTrip(trip.id);
+
+      // 3. Google ドライブ上のバックアップからの完全抹消（ログイン済みの場合）
+      if (driveToken) {
+        console.log('Google ドライブ上のバックアップからもこの旅行を完全抹消中...');
+        
+        // ドライブ上の既存のバックアップファイルを検索
+        const searchRes = await fetch(
+          `https://www.googleapis.com/drive/v3/files?q=name='TRIP_BASE_BACKUP.json' and trashed=false&fields=files(id,name)`,
+          {
+            headers: { Authorization: `Bearer ${driveToken}` }
+          }
+        );
+        
+        if (searchRes.ok) {
+          const searchData = await searchRes.json();
+          const fileId = searchData.files?.[0]?.id;
+          if (fileId) {
+            // 最新の trips と deletedTrips を取得
+            const currentTrips = useTravelStore.getState().trips;
+            // すでにZustandからは削除されているので、現在のdeletedTripsにはもう含まれていません
+            const deletedTrips = useTravelStore.getState().deletedTrips || [];
+
+            // まだ残っているすべての旅行プランから画像キーをスキャンして収集
+            const activeImageKeys = new Set<string>();
+            const remainingTrips = [...currentTrips, ...deletedTrips];
+            for (const t of remainingTrips) {
+              if (t.preparationTasks) {
+                for (const task of t.preparationTasks) {
+                  if (task.imageKey) activeImageKeys.add(task.imageKey);
+                }
+              }
+              if (t.bookings) {
+                for (const booking of t.bookings) {
+                  if (booking.imageKey) activeImageKeys.add(booking.imageKey);
+                }
+              }
+              if (t.memories) {
+                for (const memory of t.memories) {
+                  if (memory.imageKey) activeImageKeys.add(memory.imageKey);
+                }
+              }
+            }
+
+            // まだアクティブな画像のみを IndexedDB から再ロード
+            const images: Record<string, string> = {};
+            for (const key of activeImageKeys) {
+              const imgData = await get(key);
+              if (imgData) {
+                images[key] = imgData as string;
+              }
+            }
+
+            // ドライブのファイルを上書き更新（完全抹消版）
+            const backupData = JSON.stringify({ trips: currentTrips, deletedTrips, images }, null, 2);
+            await fetch(
+              `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,
+              {
+                method: 'PATCH',
+                headers: {
+                  Authorization: `Bearer ${driveToken}`,
+                  'Content-Type': 'application/json'
+                },
+                body: backupData
+              }
+            );
+            console.log('Google ドライブバックアップからの抹消完了。');
+          }
+        }
+      }
+      alert(`🎉 「${trip.tripName || '無題の旅行'}」の全データ・画像・クラウドバックアップからの完全抹消が完了しました！`);
+    } catch (err: any) {
+      console.error('完全削除中のエラー:', err);
+      alert(`完全削除中にエラーが発生しました: ${err.message}`);
+    }
+  };
 
   // One-time fix to rename the old sample trip in existing local storage
   useEffect(() => {
@@ -257,33 +556,143 @@ export default function Dashboard() {
         {showSettings && (
           <div className="modal-overlay" onClick={() => setShowSettings(false)}>
             <div className="modal-content" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-4 border-b border-slate-200 pb-3">
-                <h3 className="flex items-center gap-2" style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>
-                  <Settings size={20} color="var(--accent-color)" /> データ保存・設定
+              <div className="flex items-center justify-between mb-3 border-b border-slate-200 pb-2">
+                <h3 className="flex items-center gap-2" style={{ fontSize: '1.15rem', fontWeight: 'bold' }}>
+                  <Settings size={18} color="var(--accent-color)" /> データ保存・設定
                 </h3>
-                <button onClick={() => setShowSettings(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
+                <button onClick={() => setShowSettings(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
+              </div>
+
+              {/* 美しいタブ切り替えコントロール */}
+              <div className="flex gap-2 mb-4 p-1 rounded-xl bg-slate-100/80" style={{ border: '1px solid rgba(0,0,0,0.03)' }}>
+                <button 
+                  onClick={() => setSettingsTab('local')}
+                  className="flex-1 py-1.5 text-xs font-bold rounded-lg transition-all"
+                  style={{
+                    background: settingsTab === 'local' ? '#white' : 'transparent',
+                    backgroundColor: settingsTab === 'local' ? 'white' : 'transparent',
+                    color: settingsTab === 'local' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    boxShadow: settingsTab === 'local' ? '0 2px 6px rgba(0,0,0,0.05)' : 'none',
+                    border: 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  💾 ローカル保存
+                </button>
+                <button 
+                  onClick={() => setSettingsTab('google')}
+                  className="flex-1 py-1.5 text-xs font-bold rounded-lg transition-all"
+                  style={{
+                    background: settingsTab === 'google' ? 'white' : 'transparent',
+                    backgroundColor: settingsTab === 'google' ? 'white' : 'transparent',
+                    color: settingsTab === 'google' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    boxShadow: settingsTab === 'google' ? '0 2px 6px rgba(0,0,0,0.05)' : 'none',
+                    border: 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  ☁️ Googleドライブ
+                </button>
               </div>
               
               <div className="flex flex-col gap-4">
-                <div className="glass-panel p-4">
-                  <h4 className="font-bold text-slate-700 mb-2 flex items-center gap-2"><Download size={16} /> データのバックアップ (書き出し)</h4>
-                  <p className="text-xs text-slate-500 mb-3">
-                    現在の旅行データをJSONファイルとしてダウンロードします。家族に共有したり、バックアップとして保存できます。（※画像データは一部含まれない場合があります）
-                  </p>
-                  <button onClick={handleExport} className="btn-primary w-full justify-center">データをダウンロード</button>
-                </div>
+                {settingsTab === 'local' ? (
+                  <>
+                    <div className="glass-panel p-4" style={{ borderRadius: '16px' }}>
+                      <h4 className="font-bold text-slate-700 mb-2 flex items-center gap-2" style={{ fontSize: '0.85rem' }}><Download size={14} /> データのバックアップ (書き出し)</h4>
+                      <p className="text-slate-500 mb-3" style={{ fontSize: '0.7rem', lineHeight: 1.4 }}>
+                        現在の旅行データをJSONファイルとしてダウンロードします。家族に共有したり、バックアップとして保存できます。（※画像データは一部含まれない場合があります）
+                      </p>
+                      <button onClick={handleExport} className="btn-primary w-full justify-center py-2 text-xs">データをダウンロード</button>
+                    </div>
 
-                <div className="glass-panel p-4">
-                  <h4 className="font-bold text-slate-700 mb-2 flex items-center gap-2"><Upload size={16} /> データの復元 (読み込み)</h4>
-                  <p className="text-xs text-slate-500 mb-3 text-red-500 font-medium">
-                    ⚠️ バックアップファイルを読み込みます。現在のデータはすべて上書きされ、元に戻せません。
-                  </p>
-                  <label className="btn-secondary w-full justify-center cursor-pointer text-center block">
-                    <input type="file" accept=".json" style={{ display: 'none' }} onChange={handleImport} />
-                    データファイルを読み込む
-                  </label>
-                </div>
+                    <div className="glass-panel p-4" style={{ borderRadius: '16px' }}>
+                      <h4 className="font-bold text-slate-700 mb-2 flex items-center gap-2" style={{ fontSize: '0.85rem' }}><Upload size={14} /> データの復元 (読み込み)</h4>
+                      <p className="mb-3 text-red-500 font-medium" style={{ fontSize: '0.7rem', lineHeight: 1.4 }}>
+                        ⚠️ バックアップファイルを読み込みます。現在のデータはすべて上書きされ、元に戻せません。
+                      </p>
+                      <label className="btn-secondary w-full justify-center cursor-pointer text-center block py-2 text-xs">
+                        <input type="file" accept=".json" style={{ display: 'none' }} onChange={handleImport} />
+                        データファイルを読み込む
+                      </label>
+                    </div>
+                  </>
+                ) : (
+                  /* Google ドライブ同期セクション */
+                  <div className="glass-panel p-4" style={{ background: 'rgba(59, 130, 246, 0.03)', borderColor: 'rgba(59, 130, 246, 0.15)', borderRadius: '16px' }}>
+                    <h4 className="font-bold text-slate-700 mb-2 flex items-center gap-2" style={{ fontSize: '0.85rem' }}>
+                      <span style={{ fontSize: '14px' }}>☁️</span> Google ドライブ自動同期
+                    </h4>
+                    <p className="text-slate-500 mb-3" style={{ fontSize: '0.7rem', lineHeight: 1.4 }}>
+                      Google ドライブに旅行データ、ゴミ箱の履歴、および添付されたスクリーンショット画像を丸ごと暗号化して自動同期・復元します。
+                    </p>
+                    
+                    <div className="mb-3">
+                      <label className="font-bold text-slate-700 mb-1 block" style={{ fontSize: '0.75rem' }}>Google OAuth クライアントID</label>
+                      <input 
+                        type="text" 
+                        placeholder="OAuth 2.0 クライアント ID を入力" 
+                        className="input-field" 
+                        style={{ marginBottom: 0, fontSize: '0.75rem', padding: '0.4rem' }}
+                        value={googleClientId}
+                        onChange={e => {
+                          setGoogleClientId(e.target.value);
+                          localStorage.setItem('google_drive_client_id', e.target.value);
+                        }}
+                      />
+                    </div>
+
+                    <button 
+                      onClick={handleGoogleDriveSync} 
+                      className="btn-primary w-full justify-center flex items-center gap-2 py-2.5 text-xs" 
+                      style={{ background: '#3b82f6', color: 'white' }}
+                      disabled={!googleClientId || isSyncing}
+                    >
+                      {isSyncing ? '同期処理中...' : 'Google ドライブと同期する'}
+                    </button>
+                  </div>
+                )}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ゴミ箱（最近削除した旅行計画）セクション */}
+        {deletedTrips.length > 0 && (
+          <div className="glass-panel" style={{ marginTop: '2rem', background: 'rgba(239, 68, 68, 0.02)', borderColor: 'rgba(239, 68, 68, 0.15)' }}>
+            <h3 className="flex items-center gap-2 mb-2 text-slate-700 font-bold" style={{ fontSize: '0.95rem' }}>
+              <span>🗑️</span> 最近削除した旅行（ゴミ箱）
+            </h3>
+            <p className="text-xs text-slate-500 mb-3">
+              削除された旅行計画はここに一時保存されます。ワンクリックで復元することができます。
+            </p>
+            <div className="flex" style={{ flexDirection: 'column', gap: '0.75rem' }}>
+              {deletedTrips.map((trip) => (
+                <div key={trip.id} className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white/60">
+                  <div>
+                    <h4 className="font-bold text-slate-800" style={{ fontSize: '0.9rem' }}>{trip.tripName}</h4>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      📅 {trip.tripDate ? new Date(trip.tripDate).toLocaleDateString('ja-JP') : '日付未定'}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => restoreTrip(trip.id)} 
+                      className="btn-primary" 
+                      style={{ padding: '0.3rem 0.7rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                    >
+                      🔄 復元する
+                    </button>
+                     <button 
+                      onClick={() => handlePermanentlyDelete(trip)} 
+                      className="btn-secondary" 
+                      style={{ padding: '0.3rem 0.7rem', fontSize: '0.75rem', color: 'var(--danger)', borderColor: 'var(--danger)' }}
+                    >
+                      削除
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}

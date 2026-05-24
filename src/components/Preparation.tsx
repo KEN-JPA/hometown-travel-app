@@ -1,6 +1,241 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTravelStore, type PreparationTask } from '../store';
-import { CalendarClock, CheckCircle, Circle, Play, Info, Sparkles, Plus, Trash2, Edit2 } from 'lucide-react';
+import { CalendarClock, CheckCircle, Circle, Play, Info, Sparkles, Plus, Trash2, Edit2, Camera, X } from 'lucide-react';
+import { set, get } from 'idb-keyval';
+
+function TaskItem({ 
+  task, 
+  overdue, 
+  editingTaskId, 
+  startEditing, 
+  handleStatusToggle, 
+  handleUpdateTask, 
+  deletePreparationTask, 
+  updatePreparationTask, 
+  setEditingTaskId,
+  editTaskTitle, setEditTaskTitle,
+  editTaskDate, setEditTaskDate,
+  editTaskNotes, setEditTaskNotes
+}: { 
+  task: PreparationTask, 
+  overdue: boolean,
+  editingTaskId: string | null,
+  startEditing: (t: PreparationTask) => void,
+  handleStatusToggle: (t: PreparationTask) => void,
+  handleUpdateTask: (e: React.FormEvent, id: string) => void,
+  deletePreparationTask: (id: string) => void,
+  updatePreparationTask: (id: string, updates: any) => void,
+  setEditingTaskId: (id: string | null) => void,
+  editTaskTitle: string, setEditTaskTitle: (v: string) => void,
+  editTaskDate: string, setEditTaskDate: (v: string) => void,
+  editTaskNotes: string, setEditTaskNotes: (v: string) => void
+}) {
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [showModal, setShowModal] = useState(false);
+
+  useEffect(() => {
+    if (task.imageKey) {
+      get(task.imageKey).then((data) => {
+        if (data) setImageUrl(data as string);
+      });
+    } else {
+      setImageUrl(null);
+    }
+  }, [task.imageKey]);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64String = reader.result as string;
+      const key = `prep-task-img-${task.id}`;
+      await set(key, base64String);
+      updatePreparationTask(task.id, { imageKey: key });
+      setImageUrl(base64String);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleImageRemove = async () => {
+    if (window.confirm('スクリーンショットを削除してもよろしいですか？')) {
+      updatePreparationTask(task.id, { imageKey: undefined });
+      setImageUrl(null);
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'completed': return <CheckCircle className="text-emerald-500" size={24} />;
+      case 'in_progress': return <Play className="text-amber-500" size={24} />;
+      default: return <Circle className="text-slate-300" size={24} />;
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'completed': return '完了';
+      case 'in_progress': return '手配中';
+      default: return '未着手';
+    }
+  };
+
+  return (
+    <>
+      <div className={`glass-panel p-4 flex gap-4 items-start ${overdue ? 'border-2 border-rose-200 bg-rose-50/30' : ''}`}>
+        <button 
+          onClick={() => handleStatusToggle(task)}
+          className="mt-1 shrink-0 transition-transform active:scale-90"
+        >
+          {getStatusIcon(task.status)}
+        </button>
+        
+        <div className="flex-1 min-w-0">
+          {editingTaskId === task.id ? (
+            <form onSubmit={(e) => handleUpdateTask(e, task.id)} className="space-y-3">
+              <div>
+                <div className="text-xs font-bold text-slate-700 mb-1">やること（必須）</div>
+                <input type="text" className="input-field" style={{ marginBottom: 0 }} value={editTaskTitle} onChange={e => setEditTaskTitle(e.target.value)} required />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-slate-700 mb-1">目標日・期限（任意）</div>
+                <input type="date" className="input-field" style={{ marginBottom: 0 }} value={editTaskDate} onChange={e => setEditTaskDate(e.target.value)} />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-slate-700 mb-1">メモ・詳細（任意）</div>
+                <textarea className="input-field" style={{ marginBottom: 0, minHeight: '60px' }} value={editTaskNotes} onChange={e => setEditTaskNotes(e.target.value)} />
+              </div>
+              <div className="flex gap-2 mt-2">
+                <button type="submit" className="btn-primary flex-1 py-2 text-sm">保存</button>
+                <button type="button" className="btn-secondary py-2 text-sm" onClick={() => setEditingTaskId(null)}>キャンセル</button>
+              </div>
+            </form>
+          ) : (
+            <>
+              <div className="flex items-start justify-between gap-2">
+                <h3 className={`font-bold ${task.status === 'completed' ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
+                  {task.title}
+                </h3>
+                <div className="flex gap-1 shrink-0">
+                  <button onClick={() => startEditing(task)} className="text-slate-300 hover:text-indigo-400 p-1">
+                    <Edit2 size={16} />
+                  </button>
+                  <button 
+                    onClick={() => {
+                      if (window.confirm('このタスクを削除してもよろしいですか？')) {
+                        deletePreparationTask(task.id);
+                      }
+                    }} 
+                    className="text-slate-300 hover:text-rose-400 p-1"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium
+                  ${task.status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
+                    task.status === 'in_progress' ? 'bg-amber-100 text-amber-700' :
+                    'bg-slate-100 text-slate-600'}`}>
+                  {getStatusText(task.status)}
+                </span>
+                
+                {task.targetDate && (
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded ${overdue ? 'bg-rose-100 text-rose-700' : 'bg-indigo-50 text-indigo-600'}`}>
+                    {overdue ? '⚠️ 期限切れ: ' : '目安: '}
+                    {new Date(task.targetDate).toLocaleDateString()}
+                  </span>
+                )}
+              </div>
+              
+              {task.notes && (
+                <p className="text-xs text-slate-500 mt-2 bg-slate-50 p-2 rounded whitespace-pre-wrap">
+                  {task.notes}
+                </p>
+              )}
+
+              {/* スクリーンショット添付 UI */}
+              <div style={{ marginTop: '0.75rem' }}>
+                {imageUrl ? (
+                  <div className="flex flex-col gap-1">
+                    <div style={{ position: 'relative', width: '120px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--glass-border)', cursor: 'pointer' }} onClick={() => setShowModal(true)}>
+                      <img src={imageUrl} alt="スクリーンショット" style={{ width: '100%', height: '80px', objectFit: 'cover' }} />
+                      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.2s' }} className="hover:opacity-100">
+                        <span style={{ color: 'white', fontSize: '0.65rem', fontWeight: 'bold' }}>拡大表示</span>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 text-xs" style={{ marginTop: '0.25rem' }}>
+                      <label style={{ color: 'var(--accent-color)', cursor: 'pointer' }}>
+                        <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} />
+                        変更
+                      </label>
+                      <button onClick={handleImageRemove} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: 0 }}>
+                        削除
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <label className="flex items-center gap-1 text-slate-400 hover:text-indigo-500 cursor-pointer text-xs transition-colors" style={{ display: 'inline-flex', padding: '0.25rem 0.5rem', background: 'rgba(0,0,0,0.03)', borderRadius: '6px' }}>
+                    <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} />
+                    <Camera size={14} />
+                    <span>スクショを追加</span>
+                  </label>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* 画像拡大表示用モーダル */}
+      {showModal && imageUrl && (
+        <div 
+          onClick={() => setShowModal(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            backgroundColor: 'rgba(0,0,0,0.85)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            padding: '1.5rem'
+          }}
+        >
+          <button 
+            onClick={() => setShowModal(false)}
+            style={{
+              position: 'absolute', top: '1.5rem', right: '1.5rem',
+              background: 'white', border: 'none', borderRadius: '50%',
+              width: '40px', height: '40px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', color: '#374151'
+            }}
+          >
+            <X size={20} />
+          </button>
+          
+          <div style={{ textAlign: 'center', marginBottom: '1.5rem', color: 'white' }}>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{task.title}</h3>
+            <p style={{ fontSize: '0.75rem', color: '#cbd5e1' }}>スクリーンショットプレビュー</p>
+          </div>
+
+          <div style={{ 
+            width: '100%', maxWidth: '500px', 
+            background: 'white', padding: '0.5rem',
+            borderRadius: '12px', overflow: 'hidden'
+          }}>
+            <img 
+              src={imageUrl} 
+              alt="Screenshot Preview" 
+              style={{ 
+                width: '100%', height: 'auto', display: 'block', maxHeight: '70vh', objectFit: 'contain'
+              }} 
+            />
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 
 export default function Preparation() {
   const { trips, selectedTripId, generateAutoTasks, updatePreparationTask, deletePreparationTask, addPreparationTask } = useTravelStore();
@@ -36,21 +271,7 @@ export default function Preparation() {
     return target < today;
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'completed': return <CheckCircle className="text-emerald-500" size={24} />;
-      case 'in_progress': return <Play className="text-amber-500" size={24} />;
-      default: return <Circle className="text-slate-300" size={24} />;
-    }
-  };
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'completed': return '完了';
-      case 'in_progress': return '手配中';
-      default: return '未着手';
-    }
-  };
 
   const handleStatusToggle = (task: PreparationTask) => {
     const nextStatus = 
@@ -131,83 +352,26 @@ export default function Preparation() {
           sortedTasks.map(task => {
             const overdue = isOverdue(task.targetDate, task.status);
             return (
-            <div key={task.id} className={`glass-panel p-4 flex gap-4 items-start ${overdue ? 'border-2 border-rose-200 bg-rose-50/30' : ''}`}>
-              <button 
-                onClick={() => handleStatusToggle(task)}
-                className="mt-1 shrink-0 transition-transform active:scale-90"
-              >
-                {getStatusIcon(task.status)}
-              </button>
-              
-              <div className="flex-1 min-w-0">
-                {editingTaskId === task.id ? (
-                  <form onSubmit={(e) => handleUpdateTask(e, task.id)} className="space-y-3">
-                    <div>
-                      <div className="text-xs font-bold text-slate-700 mb-1">やること（必須）</div>
-                      <input type="text" className="input-field" style={{ marginBottom: 0 }} value={editTaskTitle} onChange={e => setEditTaskTitle(e.target.value)} required />
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-slate-700 mb-1">目標日・期限（任意）</div>
-                      <input type="date" className="input-field" style={{ marginBottom: 0 }} value={editTaskDate} onChange={e => setEditTaskDate(e.target.value)} />
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-slate-700 mb-1">メモ・詳細（任意）</div>
-                      <textarea className="input-field" style={{ marginBottom: 0, minHeight: '60px' }} value={editTaskNotes} onChange={e => setEditTaskNotes(e.target.value)} />
-                    </div>
-                    <div className="flex gap-2 mt-2">
-                      <button type="submit" className="btn-primary flex-1 py-2 text-sm">保存</button>
-                      <button type="button" className="btn-secondary py-2 text-sm" onClick={() => setEditingTaskId(null)}>キャンセル</button>
-                    </div>
-                  </form>
-                ) : (
-                  <>
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className={`font-bold ${task.status === 'completed' ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
-                        {task.title}
-                      </h3>
-                      <div className="flex gap-1 shrink-0">
-                        <button onClick={() => startEditing(task)} className="text-slate-300 hover:text-indigo-400 p-1">
-                          <Edit2 size={16} />
-                        </button>
-                        <button 
-                          onClick={() => {
-                            if (window.confirm('このタスクを削除してもよろしいですか？')) {
-                              deletePreparationTask(task.id);
-                            }
-                          }} 
-                          className="text-slate-300 hover:text-rose-400 p-1"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium
-                        ${task.status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
-                          task.status === 'in_progress' ? 'bg-amber-100 text-amber-700' :
-                          'bg-slate-100 text-slate-600'}`}>
-                        {getStatusText(task.status)}
-                      </span>
-                      
-                      {task.targetDate && (
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded ${overdue ? 'bg-rose-100 text-rose-700' : 'bg-indigo-50 text-indigo-600'}`}>
-                          {overdue ? '⚠️ 期限切れ: ' : '目安: '}
-                          {new Date(task.targetDate).toLocaleDateString()}
-                        </span>
-                      )}
-                    </div>
-                    
-                    {task.notes && (
-                      <p className="text-xs text-slate-500 mt-2 bg-slate-50 p-2 rounded whitespace-pre-wrap">
-                        {task.notes}
-                      </p>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-          )})
+              <TaskItem 
+                key={task.id}
+                task={task}
+                overdue={overdue}
+                editingTaskId={editingTaskId}
+                startEditing={startEditing}
+                handleStatusToggle={handleStatusToggle}
+                handleUpdateTask={handleUpdateTask}
+                deletePreparationTask={deletePreparationTask}
+                updatePreparationTask={updatePreparationTask}
+                setEditingTaskId={setEditingTaskId}
+                editTaskTitle={editTaskTitle}
+                setEditTaskTitle={setEditTaskTitle}
+                editTaskDate={editTaskDate}
+                setEditTaskDate={setEditTaskDate}
+                editTaskNotes={editTaskNotes}
+                setEditTaskNotes={setEditTaskNotes}
+              />
+            );
+          })
         )}
       </div>
 

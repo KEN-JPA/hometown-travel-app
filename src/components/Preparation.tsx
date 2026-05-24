@@ -15,7 +15,8 @@ function TaskItem({
   setEditingTaskId,
   editTaskTitle, setEditTaskTitle,
   editTaskDate, setEditTaskDate,
-  editTaskNotes, setEditTaskNotes
+  editTaskNotes, setEditTaskNotes,
+  editTaskUrl, setEditTaskUrl
 }: { 
   task: PreparationTask, 
   overdue: boolean,
@@ -28,7 +29,8 @@ function TaskItem({
   setEditingTaskId: (id: string | null) => void,
   editTaskTitle: string, setEditTaskTitle: (v: string) => void,
   editTaskDate: string, setEditTaskDate: (v: string) => void,
-  editTaskNotes: string, setEditTaskNotes: (v: string) => void
+  editTaskNotes: string, setEditTaskNotes: (v: string) => void,
+  editTaskUrl: string, setEditTaskUrl: (v: string) => void
 }) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -103,6 +105,10 @@ function TaskItem({
                 <input type="date" className="input-field" style={{ marginBottom: 0 }} value={editTaskDate} onChange={e => setEditTaskDate(e.target.value)} />
               </div>
               <div>
+                <div className="text-xs font-bold text-slate-700 mb-1">関連URL・リンク（任意）</div>
+                <input type="text" placeholder="例: https://travel.rakuten.co.jp/" className="input-field" style={{ marginBottom: 0 }} value={editTaskUrl} onChange={e => setEditTaskUrl(e.target.value)} />
+              </div>
+              <div>
                 <div className="text-xs font-bold text-slate-700 mb-1">メモ・詳細（任意）</div>
                 <textarea className="input-field" style={{ marginBottom: 0, minHeight: '60px' }} value={editTaskNotes} onChange={e => setEditTaskNotes(e.target.value)} />
               </div>
@@ -156,6 +162,21 @@ function TaskItem({
                 </p>
               )}
 
+              {/* 関連URL表示 */}
+              {task.url && (
+                <div className="mt-2.5">
+                  <a 
+                    href={task.url.startsWith('http') ? task.url : `https://${task.url}`} 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors inline-flex p-1.5 rounded-lg bg-indigo-50/50 hover:bg-indigo-50 border border-indigo-100"
+                  >
+                    <span>🔗</span>
+                    <span>関連リンクを開く</span>
+                  </a>
+                </div>
+              )}
+
               {/* スクリーンショット添付 UI */}
               <div style={{ marginTop: '0.75rem' }}>
                 {imageUrl ? (
@@ -166,6 +187,13 @@ function TaskItem({
                         <span style={{ color: 'white', fontSize: '0.65rem', fontWeight: 'bold' }}>拡大表示</span>
                       </div>
                     </div>
+
+                    {/* Googleドライブ保管の明示バッジ */}
+                    <div className="flex items-center gap-1 mt-1 text-[9px] text-slate-400 font-bold" style={{ padding: '0.1rem 0.35rem', background: 'rgba(59, 130, 246, 0.05)', borderRadius: '4px', display: 'inline-flex', width: 'fit-content' }}>
+                      <span style={{ fontSize: '10px' }}>☁️</span>
+                      <span>Googleドライブ同期・保管対象</span>
+                    </div>
+
                     <div className="flex gap-2 text-xs" style={{ marginTop: '0.25rem' }}>
                       <label style={{ color: 'var(--accent-color)', cursor: 'pointer' }}>
                         <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} />
@@ -245,11 +273,14 @@ export default function Preparation() {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDate, setNewTaskDate] = useState('');
   const [newTaskNotes, setNewTaskNotes] = useState('');
+  const [newTaskUrl, setNewTaskUrl] = useState('');
+  const [newTaskImage, setNewTaskImage] = useState<string | null>(null);
 
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editTaskTitle, setEditTaskTitle] = useState('');
   const [editTaskDate, setEditTaskDate] = useState('');
   const [editTaskNotes, setEditTaskNotes] = useState('');
+  const [editTaskUrl, setEditTaskUrl] = useState('');
 
   if (!currentTrip) return <div>旅行を選択してください</div>;
 
@@ -271,8 +302,6 @@ export default function Preparation() {
     return target < today;
   };
 
-
-
   const handleStatusToggle = (task: PreparationTask) => {
     const nextStatus = 
       task.status === 'pending' ? 'in_progress' : 
@@ -280,21 +309,43 @@ export default function Preparation() {
     updatePreparationTask(task.id, { status: nextStatus });
   };
 
-  const handleAddTask = (e: React.FormEvent) => {
+  const handleNewTaskImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setNewTaskImage(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleAddTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTaskTitle.trim()) return;
     
+    // 画像が添付されている場合はランダムキーを作成して IndexedDB へ保存
+    let imageKey: string | undefined = undefined;
+    if (newTaskImage) {
+      imageKey = `prep-task-img-temp-${Math.random().toString(36).substring(2, 9)}`;
+      await set(imageKey, newTaskImage);
+    }
+
     addPreparationTask({
       title: newTaskTitle,
       category: 'その他',
       targetDate: newTaskDate || null,
       status: 'pending',
       notes: newTaskNotes,
-      isAutoGenerated: false
+      url: newTaskUrl.trim() || undefined,
+      isAutoGenerated: false,
+      imageKey
     });
+
     setNewTaskTitle('');
     setNewTaskDate('');
     setNewTaskNotes('');
+    setNewTaskUrl('');
+    setNewTaskImage(null);
     setShowAddForm(false);
   };
 
@@ -303,6 +354,7 @@ export default function Preparation() {
     setEditTaskTitle(task.title);
     setEditTaskDate(task.targetDate || '');
     setEditTaskNotes(task.notes || '');
+    setEditTaskUrl(task.url || '');
   };
 
   const handleUpdateTask = (e: React.FormEvent, taskId: string) => {
@@ -311,7 +363,8 @@ export default function Preparation() {
     updatePreparationTask(taskId, {
       title: editTaskTitle,
       targetDate: editTaskDate || null,
-      notes: editTaskNotes
+      notes: editTaskNotes,
+      url: editTaskUrl.trim() || undefined
     });
     setEditingTaskId(null);
   };
@@ -369,6 +422,8 @@ export default function Preparation() {
                 setEditTaskDate={setEditTaskDate}
                 editTaskNotes={editTaskNotes}
                 setEditTaskNotes={setEditTaskNotes}
+                editTaskUrl={editTaskUrl}
+                setEditTaskUrl={setEditTaskUrl}
               />
             );
           })
@@ -404,6 +459,17 @@ export default function Preparation() {
             />
           </div>
           <div>
+            <div className="text-sm font-bold text-slate-700 mb-1">関連URL（任意）</div>
+            <input
+              type="text"
+              placeholder="例: https://travel.rakuten.co.jp/"
+              className="input-field"
+              style={{ marginBottom: 0 }}
+              value={newTaskUrl}
+              onChange={e => setNewTaskUrl(e.target.value)}
+            />
+          </div>
+          <div>
             <div className="text-sm font-bold text-slate-700 mb-1">メモ・詳細（任意）</div>
             <textarea
               placeholder="例: ファミリーカーを3日間借りる"
@@ -413,11 +479,46 @@ export default function Preparation() {
               onChange={e => setNewTaskNotes(e.target.value)}
             />
           </div>
+
+          {/* 新規タスク追加フォームのスクショ添付 UI */}
+          <div>
+            <div className="text-sm font-bold text-slate-700 mb-1">スクリーンショット（任意）</div>
+            {newTaskImage ? (
+              <div className="flex flex-col gap-1.5 p-2 bg-slate-50 border border-slate-200 rounded-lg" style={{ width: 'fit-content' }}>
+                <div style={{ position: 'relative', width: '120px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--glass-border)' }}>
+                  <img src={newTaskImage} alt="添付プレビュー" style={{ width: '100%', height: '80px', objectFit: 'cover' }} />
+                </div>
+                <div className="flex gap-2 text-xs">
+                  <label style={{ color: 'var(--accent-color)', cursor: 'pointer' }}>
+                    <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleNewTaskImageUpload} />
+                    変更
+                  </label>
+                  <button type="button" onClick={() => setNewTaskImage(null)} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: 0 }}>
+                    削除
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <label className="flex items-center gap-1.5 text-slate-500 hover:text-indigo-600 cursor-pointer text-xs transition-colors" style={{ display: 'inline-flex', padding: '0.4rem 0.8rem', border: '1px dashed #cbd5e1', borderRadius: '8px', background: '#f8fafc' }}>
+                <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleNewTaskImageUpload} />
+                <Camera size={14} />
+                <span>スクリーンショット画像を添付</span>
+              </label>
+            )}
+          </div>
+
           <div className="flex gap-2 pt-2">
             <button type="submit" className="btn-primary flex-1">
               追加する
             </button>
-            <button type="button" onClick={() => setShowAddForm(false)} className="btn-secondary flex-1">
+            <button type="button" onClick={() => {
+              setShowAddForm(false);
+              setNewTaskTitle('');
+              setNewTaskDate('');
+              setNewTaskNotes('');
+              setNewTaskUrl('');
+              setNewTaskImage(null);
+            }} className="btn-secondary flex-1">
               キャンセル
             </button>
           </div>

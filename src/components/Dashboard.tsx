@@ -569,7 +569,7 @@ export default function Dashboard() {
                   onClick={() => setSettingsTab('local')}
                   className="flex-1 py-1.5 text-xs font-bold rounded-lg transition-all"
                   style={{
-                    background: settingsTab === 'local' ? '#white' : 'transparent',
+                    background: settingsTab === 'local' ? 'white' : 'transparent',
                     backgroundColor: settingsTab === 'local' ? 'white' : 'transparent',
                     color: settingsTab === 'local' ? 'var(--text-primary)' : 'var(--text-secondary)',
                     boxShadow: settingsTab === 'local' ? '0 2px 6px rgba(0,0,0,0.05)' : 'none',

@@ -168,6 +168,29 @@ function App() {
     }
   }, [_hasHydrated]);
 
+  // 5秒おきにサーバーから最新データを取得して同期する (リアルタイム共有) - フック順序規則遵守のためここに移動
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/get-trips');
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.state && data.state.trips) {
+            const currentTrips = useTravelStore.getState().trips;
+            // データに差分があれば、Zustandストアを更新
+            if (JSON.stringify(currentTrips) !== JSON.stringify(data.state.trips)) {
+              useTravelStore.setState({ trips: data.state.trips });
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Polling error:', e);
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   if (!_hasHydrated) {
     return (
       <div style={{
@@ -206,29 +229,6 @@ function App() {
       </div>
     );
   }
-
-  // 5秒おきにサーバーから最新データを取得して同期する (リアルタイム共有)
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch('/api/get-trips');
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.state && data.state.trips) {
-            const currentTrips = useTravelStore.getState().trips;
-            // データに差分があれば、Zustandストアを更新
-            if (JSON.stringify(currentTrips) !== JSON.stringify(data.state.trips)) {
-              useTravelStore.setState({ trips: data.state.trips });
-            }
-          }
-        }
-      } catch (e) {
-        console.error('Polling error:', e);
-      }
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, []);
 
   return (
     <Router>

@@ -16,8 +16,12 @@ export default async function handler(req, res) {
     
     // Return empty array if no data is found
     return res.status(200).json(data || []);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to get trips:', error);
-    return res.status(500).json({ error: 'Failed to retrieve data' });
+    return res.status(500).json({ 
+      error: 'Failed to retrieve data',
+      message: error.message,
+      stack: error.stack
+    });
   }
 }

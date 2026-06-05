@@ -34,6 +34,7 @@ const BookingCard = ({ booking }: { booking: Booking }) => {
   const [editIcon, setEditIcon] = useState<IconType>(booking.icon);
   const [editTicketNumber, setEditTicketNumber] = useState(booking.ticketNumber || '');
   const [editSeatNumber, setEditSeatNumber] = useState(booking.seatNumber || '');
+  const [editDate, setEditDate] = useState(booking.date || '');
 
   useEffect(() => {
     if (booking.imageKey) {
@@ -52,6 +53,7 @@ const BookingCard = ({ booking }: { booking: Booking }) => {
     setEditIcon(booking.icon);
     setEditTicketNumber(booking.ticketNumber || '');
     setEditSeatNumber(booking.seatNumber || '');
+    setEditDate(booking.date || '');
   }, [booking]);
 
   const handleCopy = (text: string) => {
@@ -85,7 +87,8 @@ const BookingCard = ({ booking }: { booking: Booking }) => {
       link: editLink || undefined,
       icon: editIcon,
       ticketNumber: editTicketNumber || undefined,
-      seatNumber: editSeatNumber || undefined
+      seatNumber: editSeatNumber || undefined,
+      date: editDate || undefined
     });
     setIsEditing(false);
   };
@@ -103,6 +106,10 @@ const BookingCard = ({ booking }: { booking: Booking }) => {
             <div>
               <div className="text-xs font-bold text-slate-700 mb-1">種類（例: 飛行機、ホテル、レンタカー、ツアー）</div>
               <input type="text" className="input-field" style={{ marginBottom: 0, fontSize: '0.875rem' }} value={editCategory} onChange={e => setEditCategory(e.target.value)} required />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-slate-700 mb-1">日付（任意）</div>
+              <input type="date" className="input-field" style={{ marginBottom: 0, fontSize: '0.875rem' }} value={editDate} onChange={e => setEditDate(e.target.value)} />
             </div>
             <div className="flex gap-2">
               <div style={{ flex: '0 0 120px' }}>
@@ -162,6 +169,11 @@ const BookingCard = ({ booking }: { booking: Booking }) => {
               <div className="flex items-center gap-2">
                 <Icon size={20} color={booking.color} />
                 <span style={{ fontWeight: 600 }}>{booking.category}</span>
+                {booking.date && (
+                  <span className="text-xs px-2 py-0.5 bg-slate-100 rounded text-slate-600 font-medium">
+                    {booking.date}
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => setIsEditing(true)} className="flex items-center gap-1" style={{ background: 'none', border: 'none', color: 'var(--accent-color)', fontSize: '0.875rem', cursor: 'pointer' }}>
@@ -332,6 +344,18 @@ const BookingCard = ({ booking }: { booking: Booking }) => {
   );
 };
 
+const formatDate = (dateStr: string) => {
+  if (!dateStr || dateStr === '未定') return '日程未定';
+  try {
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return dateStr;
+    const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+    return `${date.getMonth() + 1}月${date.getDate()}日 (${weekdays[date.getDay()]})`;
+  } catch (e) {
+    return dateStr;
+  }
+};
+
 export default function Bookings() {
   const trips = useTravelStore((state) => state.trips);
   const selectedTripId = useTravelStore((state) => state.selectedTripId);
@@ -347,13 +371,23 @@ export default function Bookings() {
   const [newIcon, setNewIcon] = useState<IconType>('ticket');
   const [newTicketNumber, setNewTicketNumber] = useState('');
   const [newSeatNumber, setNewSeatNumber] = useState('');
+  const [newDate, setNewDate] = useState('');
 
   const [expandedIcons, setExpandedIcons] = useState<Record<string, boolean>>({});
+  const [expandedDates, setExpandedDates] = useState<Record<string, boolean>>({});
 
   const toggleIcon = (iconKey: string) => {
     setExpandedIcons(prev => ({
       ...prev,
       [iconKey]: !prev[iconKey]
+    }));
+  };
+
+  const toggleDate = (iconKey: string, dateKey: string) => {
+    const key = `${iconKey}-${dateKey}`;
+    setExpandedDates(prev => ({
+      ...prev,
+      [key]: !prev[key]
     }));
   };
 
@@ -373,15 +407,19 @@ export default function Bookings() {
     'map-pin': 'スポット'
   };
 
-  // icon ごとにグループ化
+  // icon ごと、さらに date ごとにグループ化
   const groupedBookings = bookings.reduce((acc, booking) => {
     const iconKey = booking.icon || 'ticket';
+    const dateKey = booking.date || '未定';
     if (!acc[iconKey]) {
-      acc[iconKey] = [];
+      acc[iconKey] = {};
     }
-    acc[iconKey].push(booking);
+    if (!acc[iconKey][dateKey]) {
+      acc[iconKey][dateKey] = [];
+    }
+    acc[iconKey][dateKey].push(booking);
     return acc;
-  }, {} as Record<IconType, Booking[]>);
+  }, {} as Record<IconType, Record<string, Booking[]>>);
 
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
@@ -395,12 +433,24 @@ export default function Bookings() {
       icon: newIcon,
       color: '#3b82f6',
       ticketNumber: newIcon === 'plane' ? newTicketNumber : undefined,
-      seatNumber: newIcon === 'plane' ? newSeatNumber : undefined
+      seatNumber: newIcon === 'plane' ? newSeatNumber : undefined,
+      date: newDate || undefined
     });
     setExpandedIcons(prev => ({
       ...prev,
       [newIcon]: true
     }));
+    if (newDate) {
+      setExpandedDates(prev => ({
+        ...prev,
+        [`${newIcon}-${newDate}`]: true
+      }));
+    } else {
+      setExpandedDates(prev => ({
+        ...prev,
+        [`${newIcon}-未定`]: true
+      }));
+    }
     setIsAdding(false);
     setNewCat('');
     setNewProvider('');
@@ -410,6 +460,7 @@ export default function Bookings() {
     setNewIcon('ticket');
     setNewTicketNumber('');
     setNewSeatNumber('');
+    setNewDate('');
   };
 
   return (
@@ -436,6 +487,10 @@ export default function Bookings() {
             <div>
               <div className="text-xs font-bold text-slate-700 mb-1">種類（必須）</div>
               <input type="text" placeholder="例: 飛行機、ホテル、レンタカー、ツアー" className="input-field" style={{ marginBottom: 0 }} value={newCat} onChange={e => setNewCat(e.target.value)} required autoFocus />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-slate-700 mb-1">日付（任意）</div>
+              <input type="date" className="input-field" style={{ marginBottom: 0 }} value={newDate} onChange={e => setNewDate(e.target.value)} />
             </div>
             <div className="flex gap-2">
               <div style={{ flex: '0 0 140px' }}>
@@ -494,11 +549,21 @@ export default function Bookings() {
       
       <div className="flex" style={{ flexDirection: 'column', gap: '1rem' }}>
         {bookings.length > 0 ? (
-          Object.entries(groupedBookings).map(([iconKey, iconBookings]) => {
+          Object.entries(groupedBookings).map(([iconKey, dateGroup]) => {
             const isOpen = expandedIcons[iconKey];
             const IconComponent = getIcon(iconKey as IconType);
             const label = iconLabels[iconKey as IconType] || 'その他';
-            const color = iconBookings[0]?.color || '#3b82f6';
+            
+            // アイコン配下のすべての予約件数
+            const totalCount = Object.values(dateGroup).reduce((sum, list) => sum + list.length, 0);
+            const color = Object.values(dateGroup)[0]?.[0]?.color || '#3b82f6';
+
+            // 日付をソート（日付順、未定は最後に）
+            const sortedDates = Object.keys(dateGroup).sort((a, b) => {
+              if (a === '未定') return 1;
+              if (b === '未定') return -1;
+              return a.localeCompare(b);
+            });
 
             return (
               <div key={iconKey} className="glass-panel" style={{ padding: 0, overflow: 'hidden', borderRadius: '16px' }}>
@@ -529,7 +594,7 @@ export default function Bookings() {
                     </div>
                     <div>
                       <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '1rem' }}>{label}</span>
-                      <span className="text-xs text-slate-400 ml-2">({iconBookings.length}件)</span>
+                      <span className="text-xs text-slate-400 ml-2">({totalCount}件)</span>
                     </div>
                   </div>
                   <div style={{ color: 'var(--text-secondary)' }}>
@@ -538,10 +603,48 @@ export default function Bookings() {
                 </button>
 
                 {isOpen && (
-                  <div className="p-4 border-t border-slate-100/80 bg-slate-50/30 flex flex-col gap-3">
-                    {iconBookings.map((booking) => (
-                      <BookingCard key={booking.id} booking={booking} />
-                    ))}
+                  <div className="p-3 border-t border-slate-100/80 bg-slate-50/30 flex flex-col gap-2">
+                    {sortedDates.map((dateKey) => {
+                      const dateBookings = dateGroup[dateKey];
+                      const dateAccordionKey = `${iconKey}-${dateKey}`;
+                      const isDateOpen = !!expandedDates[dateAccordionKey];
+                      
+                      return (
+                        <div key={dateKey} className="bg-white/60 backdrop-blur-sm rounded-xl border border-slate-200/60 overflow-hidden shadow-sm">
+                          <button
+                            onClick={() => toggleDate(iconKey, dateKey)}
+                            className="w-full flex items-center justify-between p-3 hover:bg-slate-100/50 transition-colors"
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              textAlign: 'left',
+                              cursor: 'pointer',
+                              outline: 'none',
+                              display: 'flex',
+                              width: '100%',
+                            }}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                                {formatDate(dateKey)}
+                              </span>
+                              <span className="text-xs text-slate-400">({dateBookings.length}件)</span>
+                            </div>
+                            <div style={{ color: 'var(--text-secondary)' }}>
+                              {isDateOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                            </div>
+                          </button>
+
+                          {isDateOpen && (
+                            <div className="p-3 border-t border-slate-100/50 bg-white/20 flex flex-col gap-3">
+                              {dateBookings.map((booking) => (
+                                <BookingCard key={booking.id} booking={booking} />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

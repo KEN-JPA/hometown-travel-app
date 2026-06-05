@@ -37,6 +37,7 @@ export interface Booking {
   link?: string;
   ticketNumber?: string;
   seatNumber?: string;
+  date?: string;
 }
 
 export interface ExpenseSplit {
@@ -207,9 +208,9 @@ const sampleTrip1: Trip = {
     }
   ],
   bookings: [
-    { id: generateId(), category: '飛行機', icon: 'plane', provider: 'ANA (全日空)', reference: 'HOK123', details: 'ANA051 - 羽田 発 / 新千歳 着', color: '#3b82f6' },
-    { id: generateId(), category: 'レンタカー', icon: 'car', provider: 'ニッポンレンタカー', reference: 'NR-8888', details: 'ミニバン (家族用)', color: '#10b981' },
-    { id: generateId(), category: 'ホテル', icon: 'building', provider: '小樽グランドホテル', reference: 'HTL-777', details: 'ファミリールーム - 1泊', color: '#8b5cf6' }
+    { id: generateId(), category: '飛行機', icon: 'plane', provider: 'ANA (全日空)', reference: 'HOK123', details: 'ANA051 - 羽田 発 / 新千歳 着', color: '#3b82f6', date: '2026-08-10' },
+    { id: generateId(), category: 'レンタカー', icon: 'car', provider: 'ニッポンレンタカー', reference: 'NR-8888', details: 'ミニバン (家族用)', color: '#10b981', date: '2026-08-10' },
+    { id: generateId(), category: 'ホテル', icon: 'building', provider: '小樽グランドホテル', reference: 'HTL-777', details: 'ファミリールーム - 1泊', color: '#8b5cf6', date: '2026-08-10' }
   ],
   expenses: [
     { id: generateId(), category: '飛行機代 (家族4人)', amount: 120000, color: '#3b82f6', isPaid: true },

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Edit2, Plane, Car, Building2, Ticket, MapPin, Home, ChevronDown, ChevronUp, PieChart } from 'lucide-react';
+import { Plus, Trash2, Edit2, Plane, Car, Building2, Ticket, MapPin, Home, ChevronDown, ChevronUp, PieChart, CreditCard } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
-import { useTravelStore, type Expense, type IconType } from '../store';
+import { useTravelStore, type Expense, type IconType, type PaymentMethod } from '../store';
 
 const iconLabels: Record<IconType, string> = {
   plane: '飛行機・交通',
@@ -19,6 +19,30 @@ const iconColors: Record<IconType, string> = {
   building: '#a78bfa', // 薄紫
   ticket: '#f59e0b', // オレンジ
   'map-pin': '#ec4899' // ピンク
+};
+
+const paymentMethodLabels: Record<PaymentMethod, string> = {
+  credit_card: 'クレジットカード',
+  points: 'ポイント',
+  miles: 'マイル',
+  cash: '現金',
+  other: 'その他'
+};
+
+const paymentMethodColors: Record<PaymentMethod, string> = {
+  credit_card: '#3b82f6', // 青
+  points: '#f59e0b',      // オレンジ
+  miles: '#8b5cf6',       // 紫
+  cash: '#10b981',        // 緑
+  other: '#64748b'        // グレー
+};
+
+const paymentMethodIcons: Record<PaymentMethod, string> = {
+  credit_card: '💳',
+  points: '🪙',
+  miles: '✈️',
+  cash: '💵',
+  other: '❓'
 };
 
 const getIcon = (type: IconType) => {
@@ -45,6 +69,15 @@ const guessIconFromCategory = (category: string, currentIcon?: IconType): IconTy
   return 'ticket'; // デフォルト
 };
 
+const guessPaymentMethodFromCategory = (category: string, amount: number, currentMethod?: PaymentMethod): PaymentMethod => {
+  if (currentMethod) return currentMethod;
+  const name = category.toLowerCase();
+  if (name.includes('マイル')) return 'miles';
+  if (name.includes('ポイント') || name.includes('paypay') || name.includes('ペイ')) return 'points';
+  if (name.includes('飛行機') || name.includes('航空') || name.includes('ホテル') || name.includes('宿泊') || name.includes('レンタカー') || amount > 10000) return 'credit_card';
+  return 'cash'; // デフォルト
+};
+
 export default function Budget() {
   const trips = useTravelStore((state) => state.trips);
   const selectedTripId = useTravelStore((state) => state.selectedTripId);
@@ -59,6 +92,7 @@ export default function Budget() {
   const [newExpenseAmount, setNewExpenseAmount] = useState('');
   const [newExpenseDescription, setNewExpenseDescription] = useState('');
   const [newExpenseIcon, setNewExpenseIcon] = useState<IconType>('ticket');
+  const [newExpensePayment, setNewExpensePayment] = useState<PaymentMethod>('credit_card');
   
   // 編集用の状態
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
@@ -66,6 +100,7 @@ export default function Budget() {
   const [editExpenseAmount, setEditExpenseAmount] = useState('');
   const [editExpenseDescription, setEditExpenseDescription] = useState('');
   const [editExpenseIcon, setEditExpenseIcon] = useState<IconType>('ticket');
+  const [editExpensePayment, setEditExpensePayment] = useState<PaymentMethod>('credit_card');
 
   const [expandedIcons, setExpandedIcons] = useState<Record<string, boolean>>({});
 
@@ -82,10 +117,11 @@ export default function Budget() {
 
   const expenses = selectedTrip.expenses;
 
-  // 各費用のアイコンを補完（過去データ対応）
+  // 各費用の補完（過去データ対応）
   const processedExpenses = expenses.map(e => ({
     ...e,
-    icon: guessIconFromCategory(e.category, e.icon)
+    icon: guessIconFromCategory(e.category, e.icon),
+    paymentMethod: guessPaymentMethodFromCategory(e.category, e.amount, e.paymentMethod)
   }));
 
   const total = processedExpenses.reduce((acc, curr) => acc + curr.amount, 0);
@@ -106,12 +142,26 @@ export default function Budget() {
     const iconKey = key as IconType;
     const catExpenses = processedExpenses.filter(e => e.icon === iconKey);
     const amount = catExpenses.reduce((acc, curr) => acc + curr.amount, 0);
-    const paidAmount = catExpenses.filter(e => e.isPaid).reduce((acc, curr) => acc + curr.amount, 0);
     return {
       iconKey,
       label: iconLabels[iconKey],
       amount,
-      paidAmount,
+      percentage: total > 0 ? Math.round((amount / total) * 100) : 0
+    };
+  }).filter(item => item.amount > 0)
+    .sort((a, b) => b.amount - a.amount);
+
+  // 支払い方法別集計の算出
+  const paymentSummary = Object.keys(paymentMethodLabels).map((key) => {
+    const methodKey = key as PaymentMethod;
+    const methodExpenses = processedExpenses.filter(e => e.paymentMethod === methodKey);
+    const amount = methodExpenses.reduce((acc, curr) => acc + curr.amount, 0);
+    return {
+      methodKey,
+      label: paymentMethodLabels[methodKey],
+      icon: paymentMethodIcons[methodKey],
+      color: paymentMethodColors[methodKey],
+      amount,
       percentage: total > 0 ? Math.round((amount / total) * 100) : 0
     };
   }).filter(item => item.amount > 0)
@@ -129,7 +179,8 @@ export default function Budget() {
       color,
       isPaid: false,
       description: newExpenseDescription || undefined,
-      icon: newExpenseIcon
+      icon: newExpenseIcon,
+      paymentMethod: newExpensePayment
     });
     
     setExpandedIcons(prev => ({
@@ -142,6 +193,7 @@ export default function Budget() {
     setNewExpenseAmount('');
     setNewExpenseDescription('');
     setNewExpenseIcon('ticket');
+    setNewExpensePayment('credit_card');
   };
 
   const startEditing = (exp: Expense) => {
@@ -150,6 +202,7 @@ export default function Budget() {
     setEditExpenseAmount(exp.amount.toString());
     setEditExpenseDescription(exp.description || '');
     setEditExpenseIcon(guessIconFromCategory(exp.category, exp.icon));
+    setEditExpensePayment(guessPaymentMethodFromCategory(exp.category, exp.amount, exp.paymentMethod));
   };
 
   const handleUpdate = (e: React.FormEvent, expenseId: string) => {
@@ -163,6 +216,7 @@ export default function Budget() {
       amount: parseInt(editExpenseAmount, 10),
       description: editExpenseDescription || undefined,
       icon: editExpenseIcon,
+      paymentMethod: editExpensePayment,
       color
     });
     setEditingExpenseId(null);
@@ -200,20 +254,36 @@ export default function Budget() {
                 autoFocus
               />
             </div>
-            <div>
-              <div className="text-xs font-bold text-slate-700 mb-1">アイコン（種類）</div>
-              <select 
-                value={newExpenseIcon} 
-                onChange={e => setNewExpenseIcon(e.target.value as IconType)}
-                style={{ width: '100%', padding: '0.6rem 0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'white' }}
-              >
-                <option value="plane">飛行機・交通</option>
-                <option value="car">レンタカー・移動</option>
-                <option value="building">ホテル・宿泊</option>
-                <option value="home">一軒家・民宿</option>
-                <option value="ticket">チケット・入場料</option>
-                <option value="map-pin">観光・食事</option>
-              </select>
+            <div className="flex gap-2">
+              <div style={{ flex: 1 }}>
+                <div className="text-xs font-bold text-slate-700 mb-1">アイコン（種類）</div>
+                <select 
+                  value={newExpenseIcon} 
+                  onChange={e => setNewExpenseIcon(e.target.value as IconType)}
+                  style={{ width: '100%', padding: '0.6rem 0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'white' }}
+                >
+                  <option value="plane">飛行機・交通</option>
+                  <option value="car">レンタカー・移動</option>
+                  <option value="building">ホテル・宿泊</option>
+                  <option value="home">一軒家・民宿</option>
+                  <option value="ticket">チケット・入場料</option>
+                  <option value="map-pin">観光・食事</option>
+                </select>
+              </div>
+              <div style={{ flex: 1 }}>
+                <div className="text-xs font-bold text-slate-700 mb-1">支払い方法</div>
+                <select 
+                  value={newExpensePayment} 
+                  onChange={e => setNewExpensePayment(e.target.value as PaymentMethod)}
+                  style={{ width: '100%', padding: '0.6rem 0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'white' }}
+                >
+                  <option value="credit_card">💳 クレジットカード</option>
+                  <option value="points">🪙 ポイント払い</option>
+                  <option value="miles">✈️ マイル払い</option>
+                  <option value="cash">💵 現金払い</option>
+                  <option value="other">❓ その他</option>
+                </select>
+              </div>
             </div>
             <div>
               <div className="text-xs font-bold text-slate-700 mb-1">金額（円）</div>
@@ -264,52 +334,98 @@ export default function Budget() {
 
       {/* 予算分析メーター（今後の旅行に生かす比率分析） */}
       {processedExpenses.length > 0 && (
-        <div className="glass-panel p-4 mb-6" style={{ background: 'var(--glass-bg)', borderRadius: '20px' }}>
-          <h3 className="font-bold text-slate-800 text-sm mb-3 flex items-center gap-1.5">
-            <PieChart size={16} className="text-indigo-500" />
-            <span>費用・カテゴリ比率分析</span>
-          </h3>
-          <div className="space-y-3">
-            {/* 積み上げ比率バー */}
-            <div className="h-3.5 w-full bg-slate-100 rounded-full overflow-hidden flex" style={{ border: '1px solid var(--glass-border)' }}>
-              {categorySummary.map((item) => (
-                <div 
-                  key={item.iconKey} 
-                  style={{ 
-                    width: `${item.percentage}%`, 
-                    backgroundColor: iconColors[item.iconKey],
-                    height: '100%'
-                  }}
-                  title={`${item.label}: ${item.percentage}%`}
-                />
-              ))}
-            </div>
+        <div className="space-y-4 mb-6">
+          {/* カテゴリ比率 */}
+          <div className="glass-panel p-4" style={{ background: 'var(--glass-bg)', borderRadius: '20px' }}>
+            <h3 className="font-bold text-slate-800 text-sm mb-3 flex items-center gap-1.5">
+              <PieChart size={16} className="text-indigo-500" />
+              <span>費用・カテゴリ比率分析</span>
+            </h3>
+            <div className="space-y-3">
+              {/* 積み上げ比率バー */}
+              <div className="h-3.5 w-full bg-slate-100 rounded-full overflow-hidden flex" style={{ border: '1px solid var(--glass-border)' }}>
+                {categorySummary.map((item) => (
+                  <div 
+                    key={item.iconKey} 
+                    style={{ 
+                      width: `${item.percentage}%`, 
+                      backgroundColor: iconColors[item.iconKey],
+                      height: '100%'
+                    }}
+                    title={`${item.label}: ${item.percentage}%`}
+                  />
+                ))}
+              </div>
 
-            {/* 各カテゴリの詳細リスト */}
-            <div className="grid grid-cols-2 gap-2 text-xs pt-1">
-              {categorySummary.map((item) => {
-                const IconComponent = getIcon(item.iconKey);
-                const color = iconColors[item.iconKey];
-                return (
-                  <div key={item.iconKey} className="flex items-center justify-between p-2 rounded-lg bg-slate-50/50 border border-slate-100">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div style={{ color, padding: '0.25rem', background: `${color}10`, borderRadius: '6px', display: 'flex' }}>
-                        <IconComponent size={14} />
+              {/* 各カテゴリの詳細リスト */}
+              <div className="grid grid-cols-2 gap-2 text-xs pt-1">
+                {categorySummary.map((item) => {
+                  const IconComponent = getIcon(item.iconKey);
+                  const color = iconColors[item.iconKey];
+                  return (
+                    <div key={item.iconKey} className="flex items-center justify-between p-2 rounded-lg bg-slate-50/50 border border-slate-100">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div style={{ color, padding: '0.25rem', background: `${color}10`, borderRadius: '6px', display: 'flex' }}>
+                          <IconComponent size={14} />
+                        </div>
+                        <span className="font-bold text-slate-700 truncate">{item.label}</span>
                       </div>
-                      <span className="font-bold text-slate-700 truncate">{item.label}</span>
+                      <div className="text-right shrink-0">
+                        <span className="font-bold text-slate-800">¥{item.amount.toLocaleString()}</span>
+                        <span className="text-[10px] text-slate-400 ml-1 font-bold">({item.percentage}%)</span>
+                      </div>
                     </div>
-                    <div className="text-right shrink-0">
-                      <span className="font-bold text-slate-800">¥{item.amount.toLocaleString()}</span>
-                      <span className="text-[10px] text-slate-400 ml-1 font-bold">({item.percentage}%)</span>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-            
-            <div className="text-[10px] text-slate-400 mt-2 bg-indigo-50/30 p-2 rounded border border-indigo-100/50" style={{ lineHeight: '1.4' }}>
-              💡 <b>今後の旅行への生かし方:</b><br />
-              今回の旅行では「<b>{categorySummary[0]?.label}</b>」が全体の <b>{categorySummary[0]?.percentage}%</b> を占めています。次回の旅行計画では、この比率を目安に予算配分を行うと、予算オーバーを防ぐことができます。
+          </div>
+
+          {/* 支払い方法比率 */}
+          <div className="glass-panel p-4" style={{ background: 'var(--glass-bg)', borderRadius: '20px' }}>
+            <h3 className="font-bold text-slate-800 text-sm mb-3 flex items-center gap-1.5">
+              <CreditCard size={16} className="text-indigo-500" />
+              <span>支払い方法別比率分析</span>
+            </h3>
+            <div className="space-y-3">
+              {/* 積み上げ比率バー */}
+              <div className="h-3.5 w-full bg-slate-100 rounded-full overflow-hidden flex" style={{ border: '1px solid var(--glass-border)' }}>
+                {paymentSummary.map((item) => (
+                  <div 
+                    key={item.methodKey} 
+                    style={{ 
+                      width: `${item.percentage}%`, 
+                      backgroundColor: item.color,
+                      height: '100%'
+                    }}
+                    title={`${item.label}: ${item.percentage}%`}
+                  />
+                ))}
+              </div>
+
+              {/* 各支払い方法の詳細リスト */}
+              <div className="grid grid-cols-2 gap-2 text-xs pt-1">
+                {paymentSummary.map((item) => {
+                  return (
+                    <div key={item.methodKey} className="flex items-center justify-between p-2 rounded-lg bg-slate-50/50 border border-slate-100">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span style={{ fontSize: '14px' }}>{item.icon}</span>
+                        <span className="font-bold text-slate-700 truncate">{item.label}</span>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="font-bold text-slate-800">¥{item.amount.toLocaleString()}</span>
+                        <span className="text-[10px] text-slate-400 ml-1 font-bold">({item.percentage}%)</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="text-[10px] text-slate-400 mt-2 bg-indigo-50/30 p-2 rounded border border-indigo-100/50" style={{ lineHeight: '1.4' }}>
+                💡 <b>今後の旅行への生かし方:</b><br />
+                今回の旅行では「<b>{categorySummary[0]?.label}</b>」が支出の最大項目（<b>{categorySummary[0]?.percentage}%</b>）であり、支払いは「<b>{paymentSummary[0]?.label}</b>」（<b>{paymentSummary[0]?.percentage}%</b>）が最多です。
+                特にマイルやポイントでの支払いは実質の手出し現金を減らせるため、次回以降の旅行でも「マイルやポイントをどの項目に充てるか」の計画に役立ちます。
+              </div>
             </div>
           </div>
         </div>
@@ -372,6 +488,8 @@ export default function Budget() {
                     <div className="p-4 border-t border-slate-100/80 bg-slate-50/30 flex flex-col gap-3">
                       {iconExpenses.map((exp) => {
                         const isEditing = editingExpenseId === exp.id;
+                        const paymentIcon = paymentMethodIcons[exp.paymentMethod || 'cash'];
+                        const paymentLabel = paymentMethodLabels[exp.paymentMethod || 'cash'];
                         return (
                           <div key={exp.id} className="glass-card bg-white p-3" style={{ opacity: exp.isPaid && !isEditing ? 0.7 : 1 }}>
                             {isEditing ? (
@@ -398,20 +516,36 @@ export default function Budget() {
                                     />
                                   </div>
                                 </div>
-                                <div>
-                                  <div className="text-xs font-bold text-slate-700 mb-1">アイコン</div>
-                                  <select 
-                                    value={editExpenseIcon} 
-                                    onChange={e => setEditExpenseIcon(e.target.value as IconType)}
-                                    style={{ width: '100%', padding: '0.4rem 0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'white', fontSize: '0.875rem' }}
-                                  >
-                                    <option value="plane">飛行機・交通</option>
-                                    <option value="car">レンタカー・移動</option>
-                                    <option value="building">ホテル・宿泊</option>
-                                    <option value="home">一軒家・民宿</option>
-                                    <option value="ticket">チケット・入場料</option>
-                                    <option value="map-pin">観光・食事</option>
-                                  </select>
+                                <div className="flex gap-2">
+                                  <div style={{ flex: 1 }}>
+                                    <div className="text-xs font-bold text-slate-700 mb-1">アイコン</div>
+                                    <select 
+                                      value={editExpenseIcon} 
+                                      onChange={e => setEditExpenseIcon(e.target.value as IconType)}
+                                      style={{ width: '100%', padding: '0.4rem 0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'white', fontSize: '0.875rem' }}
+                                    >
+                                      <option value="plane">飛行機・交通</option>
+                                      <option value="car">レンタカー・移動</option>
+                                      <option value="building">ホテル・宿泊</option>
+                                      <option value="home">一軒家・民宿</option>
+                                      <option value="ticket">チケット・入場料</option>
+                                      <option value="map-pin">観光・食事</option>
+                                    </select>
+                                  </div>
+                                  <div style={{ flex: 1 }}>
+                                    <div className="text-xs font-bold text-slate-700 mb-1">支払い方法</div>
+                                    <select 
+                                      value={editExpensePayment} 
+                                      onChange={e => setEditExpensePayment(e.target.value as PaymentMethod)}
+                                      style={{ width: '100%', padding: '0.4rem 0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'white', fontSize: '0.875rem' }}
+                                    >
+                                      <option value="credit_card">💳 クレジットカード</option>
+                                      <option value="points">🪙 ポイント払い</option>
+                                      <option value="miles">✈️ マイル払い</option>
+                                      <option value="cash">💵 現金払い</option>
+                                      <option value="other">❓ その他</option>
+                                    </select>
+                                  </div>
                                 </div>
                                 <div>
                                   <div className="text-xs font-bold text-slate-700 mb-1">メモ・詳細（任意）</div>
@@ -433,16 +567,21 @@ export default function Budget() {
                                   <div className="flex items-center gap-3">
                                     <div style={{ width: '12px', height: '12px', borderRadius: '4px', background: exp.color }}></div>
                                     <div className="flex flex-col">
-                                      <span style={{ fontWeight: 500, textDecoration: exp.isPaid ? 'line-through' : 'none', color: 'var(--text-primary)' }}>{exp.category}</span>
-                                      <label className="flex items-center gap-1 mt-1 cursor-pointer w-fit">
-                                        <input 
-                                          type="checkbox" 
-                                          checked={exp.isPaid || false} 
-                                          onChange={() => toggleExpensePaid(exp.id)}
-                                          className="accent-emerald-500 w-3 h-3"
-                                        />
-                                        <span className="text-xs text-slate-500">{exp.isPaid ? '支払済' : '未払い'}</span>
-                                      </label>
+                                      <span style={{ fontWeight: 600, textDecoration: exp.isPaid ? 'line-through' : 'none', color: 'var(--text-primary)' }}>{exp.category}</span>
+                                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                        <label className="flex items-center gap-1 cursor-pointer w-fit">
+                                          <input 
+                                            type="checkbox" 
+                                            checked={exp.isPaid || false} 
+                                            onChange={() => toggleExpensePaid(exp.id)}
+                                            className="accent-emerald-500 w-3 h-3"
+                                          />
+                                          <span className="text-xs text-slate-500">{exp.isPaid ? '支払済' : '未払い'}</span>
+                                        </label>
+                                        <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold">
+                                          {paymentIcon} {paymentLabel}
+                                        </span>
+                                      </div>
                                     </div>
                                   </div>
                                   <div className="flex items-center gap-2">

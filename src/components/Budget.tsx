@@ -25,6 +25,7 @@ const paymentMethodLabels: Record<PaymentMethod, string> = {
   credit_card: 'クレジットカード',
   points: 'ポイント',
   miles: 'マイル',
+  sky_coin: 'ANA SKY コイン',
   cash: '現金',
   other: 'その他'
 };
@@ -33,6 +34,7 @@ const paymentMethodColors: Record<PaymentMethod, string> = {
   credit_card: '#3b82f6', // 青
   points: '#f59e0b',      // オレンジ
   miles: '#8b5cf6',       // 紫
+  sky_coin: '#00579f',    // ANAブルー
   cash: '#10b981',        // 緑
   other: '#64748b'        // グレー
 };
@@ -41,6 +43,7 @@ const paymentMethodIcons: Record<PaymentMethod, string> = {
   credit_card: '💳',
   points: '🪙',
   miles: '✈️',
+  sky_coin: '🎫',
   cash: '💵',
   other: '❓'
 };
@@ -73,6 +76,7 @@ const guessPaymentMethodFromCategory = (category: string, amount: number, curren
   if (currentMethod) return currentMethod;
   const name = category.toLowerCase();
   if (name.includes('マイル')) return 'miles';
+  if (name.includes('skyコイン') || name.includes('sky コイン') || name.includes('スカイコイン') || name.includes('skycoin')) return 'sky_coin';
   if (name.includes('ポイント') || name.includes('paypay') || name.includes('ペイ')) return 'points';
   if (name.includes('飛行機') || name.includes('航空') || name.includes('ホテル') || name.includes('宿泊') || name.includes('レンタカー') || amount > 10000) return 'credit_card';
   return 'cash'; // デフォルト
@@ -299,6 +303,7 @@ export default function Budget() {
                   <option value="credit_card">💳 クレジットカード</option>
                   <option value="points">🪙 ポイント払い</option>
                   <option value="miles">✈️ マイル払い</option>
+                  <option value="sky_coin">🎫 ANA SKY コイン</option>
                   <option value="cash">💵 現金払い</option>
                   <option value="other">❓ その他</option>
                 </select>
@@ -497,6 +502,7 @@ export default function Budget() {
                                       <option value="credit_card">💳 クレジットカード</option>
                                       <option value="points">🪙 ポイント払い</option>
                                       <option value="miles">✈️ マイル払い</option>
+                                      <option value="sky_coin">🎫 ANA SKY コイン</option>
                                       <option value="cash">💵 現金払い</option>
                                       <option value="other">❓ その他</option>
                                     </select>

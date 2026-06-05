@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { kvStorage } from './lib/kvStorage';
 export type IconType = 'plane' | 'car' | 'home' | 'building' | 'ticket' | 'map-pin';
-export type PaymentMethod = 'credit_card' | 'points' | 'miles' | 'cash' | 'other';
+export type PaymentMethod = 'credit_card' | 'points' | 'miles' | 'sky_coin' | 'cash' | 'other';
 
 export interface Event {
   id: string;

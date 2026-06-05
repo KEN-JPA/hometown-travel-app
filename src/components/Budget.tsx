@@ -105,6 +105,10 @@ export default function Budget() {
   const [expandedIcons, setExpandedIcons] = useState<Record<string, boolean>>({});
   const [groupBy, setGroupBy] = useState<'category' | 'payment'>('category');
 
+  // 分析アコーディオンの開閉用状態
+  const [showCategoryAnalysis, setShowCategoryAnalysis] = useState(false);
+  const [showPaymentAnalysis, setShowPaymentAnalysis] = useState(false);
+
   const toggleIcon = (iconKey: string) => {
     setExpandedIcons(prev => ({
       ...prev,
@@ -238,7 +242,7 @@ export default function Budget() {
   const activeGrouped = groupBy === 'category' ? groupedExpenses : groupedByPayment;
 
   return (
-    <div>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="title">費用・予算</h2>
@@ -346,110 +350,11 @@ export default function Budget() {
           </div>
         )}
       </div>
-
-      {/* 予算分析メーター（今後の旅行に生かす比率分析） */}
-      {processedExpenses.length > 0 && (
-        <div className="space-y-4 mb-6">
-          {/* カテゴリ比率 */}
-          <div className="glass-panel p-4" style={{ background: 'var(--glass-bg)', borderRadius: '20px' }}>
-            <h3 className="font-bold text-slate-800 text-sm mb-3 flex items-center gap-1.5">
-              <PieChart size={16} className="text-indigo-500" />
-              <span>費用・カテゴリ比率分析</span>
-            </h3>
-            <div className="space-y-3">
-              {/* 積み上げ比率バー */}
-              <div className="h-3.5 w-full bg-slate-100 rounded-full overflow-hidden flex" style={{ border: '1px solid var(--glass-border)' }}>
-                {categorySummary.map((item) => (
-                  <div 
-                    key={item.iconKey} 
-                    style={{ 
-                      width: `${item.percentage}%`, 
-                      backgroundColor: iconColors[item.iconKey],
-                      height: '100%'
-                    }}
-                    title={`${item.label}: ${item.percentage}%`}
-                  />
-                ))}
-              </div>
-
-              {/* 各カテゴリの詳細リスト */}
-              <div className="grid grid-cols-2 gap-2 text-xs pt-1">
-                {categorySummary.map((item) => {
-                  const IconComponent = getIcon(item.iconKey);
-                  const color = iconColors[item.iconKey];
-                  return (
-                    <div key={item.iconKey} className="flex items-center justify-between p-2 rounded-lg bg-slate-50/50 border border-slate-100">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div style={{ color, padding: '0.25rem', background: `${color}10`, borderRadius: '6px', display: 'flex' }}>
-                          <IconComponent size={14} />
-                        </div>
-                        <span className="font-bold text-slate-700 truncate">{item.label}</span>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <span className="font-bold text-slate-800">¥{item.amount.toLocaleString()}</span>
-                        <span className="text-[10px] text-slate-400 ml-1 font-bold">({item.percentage}%)</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* 支払い方法比率 */}
-          <div className="glass-panel p-4" style={{ background: 'var(--glass-bg)', borderRadius: '20px' }}>
-            <h3 className="font-bold text-slate-800 text-sm mb-3 flex items-center gap-1.5">
-              <CreditCard size={16} className="text-indigo-500" />
-              <span>支払い方法別比率分析</span>
-            </h3>
-            <div className="space-y-3">
-              {/* 積み上げ比率バー */}
-              <div className="h-3.5 w-full bg-slate-100 rounded-full overflow-hidden flex" style={{ border: '1px solid var(--glass-border)' }}>
-                {paymentSummary.map((item) => (
-                  <div 
-                    key={item.methodKey} 
-                    style={{ 
-                      width: `${item.percentage}%`, 
-                      backgroundColor: item.color,
-                      height: '100%'
-                    }}
-                    title={`${item.label}: ${item.percentage}%`}
-                  />
-                ))}
-              </div>
-
-              {/* 各支払い方法の詳細リスト */}
-              <div className="grid grid-cols-2 gap-2 text-xs pt-1">
-                {paymentSummary.map((item) => {
-                  return (
-                    <div key={item.methodKey} className="flex items-center justify-between p-2 rounded-lg bg-slate-50/50 border border-slate-100">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span style={{ fontSize: '14px' }}>{item.icon}</span>
-                        <span className="font-bold text-slate-700 truncate">{item.label}</span>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <span className="font-bold text-slate-800">¥{item.amount.toLocaleString()}</span>
-                        <span className="text-[10px] text-slate-400 ml-1 font-bold">({item.percentage}%)</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="text-[10px] text-slate-400 mt-2 bg-indigo-50/30 p-2 rounded border border-indigo-100/50" style={{ lineHeight: '1.4' }}>
-                💡 <b>今後の旅行への生かし方:</b><br />
-                今回の旅行では「<b>{categorySummary[0]?.label}</b>」が支出の最大項目（<b>{categorySummary[0]?.percentage}%</b>）であり、支払いは「<b>{paymentSummary[0]?.label}</b>」（<b>{paymentSummary[0]?.percentage}%</b>）が最多です。
-                特にマイルやポイントでの支払いは実質の手出し現金を減らせるため、次回以降の旅行でも「マイルやポイントをどの項目に充てるか」の計画に役立ちます。
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
       
       {/* Breakdown */}
       {processedExpenses.length > 0 ? (
         <>
-          <div className="flex items-center justify-between mb-4 mt-6">
+          <div className="flex items-center justify-between mb-4 mt-2">
             <h3 className="title" style={{ fontSize: '1.1rem', marginBottom: 0 }}>内訳のまとめ方</h3>
             <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200/50" style={{ width: 'fit-content' }}>
               <button 
@@ -687,6 +592,151 @@ export default function Budget() {
             </p>
           </div>
         )
+      )}
+
+      {/* 予算分析メーター（画面最下部に配置 ＆ タップで表示するアコーディオン設計） */}
+      {processedExpenses.length > 0 && (
+        <div className="space-y-3 mt-8 pb-8">
+          <div className="border-t border-slate-200 pt-4">
+            <h4 className="text-xs font-bold text-slate-400 mb-2">予算・支払いの分析</h4>
+          </div>
+          
+          {/* カテゴリ比率分析 */}
+          <div className="glass-panel" style={{ padding: 0, overflow: 'hidden', borderRadius: '16px' }}>
+            <button
+              type="button"
+              onClick={() => setShowCategoryAnalysis(!showCategoryAnalysis)}
+              className="w-full flex items-center justify-between p-3.5 hover:bg-slate-50/50 transition-colors"
+              style={{
+                background: 'none',
+                border: 'none',
+                textAlign: 'left',
+                cursor: 'pointer',
+                outline: 'none',
+                display: 'flex',
+                width: '100%',
+              }}
+            >
+              <div className="flex items-center gap-2 font-bold text-slate-700 text-xs">
+                <PieChart size={14} className="text-indigo-500" />
+                <span>費用・カテゴリ比率分析（タップして確認）</span>
+              </div>
+              <div style={{ color: 'var(--text-secondary)' }}>
+                {showCategoryAnalysis ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              </div>
+            </button>
+            
+            {showCategoryAnalysis && (
+              <div className="p-3.5 border-t border-slate-100 bg-white space-y-3 text-xs">
+                {/* 積み上げ比率バー */}
+                <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden flex" style={{ border: '1px solid var(--glass-border)' }}>
+                  {categorySummary.map((item) => (
+                    <div 
+                      key={item.iconKey} 
+                      style={{ 
+                        width: `${item.percentage}%`, 
+                        backgroundColor: iconColors[item.iconKey],
+                        height: '100%'
+                      }}
+                      title={`${item.label}: ${item.percentage}%`}
+                    />
+                  ))}
+                </div>
+
+                {/* 各カテゴリの詳細リスト */}
+                <div className="grid grid-cols-2 gap-2">
+                  {categorySummary.map((item) => {
+                    const IconComponent = getIcon(item.iconKey);
+                    const color = iconColors[item.iconKey];
+                    return (
+                      <div key={item.iconKey} className="flex items-center justify-between p-1.5 rounded bg-slate-50 border border-slate-100">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <div style={{ color, padding: '0.15rem', background: `${color}10`, borderRadius: '4px', display: 'flex' }}>
+                            <IconComponent size={12} />
+                          </div>
+                          <span className="font-bold text-slate-700 truncate">{item.label}</span>
+                        </div>
+                        <div className="text-right shrink-0 font-bold text-slate-800">
+                          <span>¥{item.amount.toLocaleString()}</span>
+                          <span className="text-[9px] text-slate-400 ml-1 font-bold">({item.percentage}%)</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 支払い方法比率分析 */}
+          <div className="glass-panel" style={{ padding: 0, overflow: 'hidden', borderRadius: '16px' }}>
+            <button
+              type="button"
+              onClick={() => setShowPaymentAnalysis(!showPaymentAnalysis)}
+              className="w-full flex items-center justify-between p-3.5 hover:bg-slate-50/50 transition-colors"
+              style={{
+                background: 'none',
+                border: 'none',
+                textAlign: 'left',
+                cursor: 'pointer',
+                outline: 'none',
+                display: 'flex',
+                width: '100%',
+              }}
+            >
+              <div className="flex items-center gap-2 font-bold text-slate-700 text-xs">
+                <CreditCard size={14} className="text-indigo-500" />
+                <span>支払い方法ごとの合計・比率（タップして確認）</span>
+              </div>
+              <div style={{ color: 'var(--text-secondary)' }}>
+                {showPaymentAnalysis ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              </div>
+            </button>
+            
+            {showPaymentAnalysis && (
+              <div className="p-3.5 border-t border-slate-100 bg-white space-y-3 text-xs">
+                {/* 積み上げ比率バー */}
+                <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden flex" style={{ border: '1px solid var(--glass-border)' }}>
+                  {paymentSummary.map((item) => (
+                    <div 
+                      key={item.methodKey} 
+                      style={{ 
+                        width: `${item.percentage}%`, 
+                        backgroundColor: item.color,
+                        height: '100%'
+                      }}
+                      title={`${item.label}: ${item.percentage}%`}
+                    />
+                  ))}
+                </div>
+
+                {/* 各支払い方法の詳細リスト */}
+                <div className="grid grid-cols-2 gap-2">
+                  {paymentSummary.map((item) => {
+                    return (
+                      <div key={item.methodKey} className="flex items-center justify-between p-1.5 rounded bg-slate-50 border border-slate-100">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span style={{ fontSize: '12px' }}>{item.icon}</span>
+                          <span className="font-bold text-slate-700 truncate">{item.label}</span>
+                        </div>
+                        <div className="text-right shrink-0 font-bold text-slate-800">
+                          <span>¥{item.amount.toLocaleString()}</span>
+                          <span className="text-[9px] text-slate-400 ml-1 font-bold">({item.percentage}%)</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="text-[10px] text-slate-400 mt-2 bg-indigo-50/30 p-2 rounded border border-indigo-100/50" style={{ lineHeight: '1.4' }}>
+                  💡 <b>今後の旅行への生かし方:</b><br />
+                  今回の旅行では「<b>{categorySummary[0]?.label}</b>」が支出の最大項目（<b>{categorySummary[0]?.percentage}%</b>）であり、支払いは「<b>{paymentSummary[0]?.label}</b>」（<b>{paymentSummary[0]?.percentage}%</b>）が最多です。
+                  次回以降の旅行計画でも「マイルやポイントをどの項目に充てるか」の計画に役立ちます。
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

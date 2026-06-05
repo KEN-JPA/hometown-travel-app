@@ -37,6 +37,11 @@ export interface Booking {
   link?: string;
 }
 
+export interface ExpenseSplit {
+  paymentMethod: PaymentMethod;
+  amount: number;
+}
+
 export interface Expense {
   id: string;
   category: string;
@@ -46,6 +51,7 @@ export interface Expense {
   description?: string;
   icon?: IconType;
   paymentMethod?: PaymentMethod;
+  splits?: ExpenseSplit[];
 }
 
 export interface PackingItem {

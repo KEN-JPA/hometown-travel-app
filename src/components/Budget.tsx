@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, Edit2, Plane, Car, Building2, Ticket, MapPin, Home, ChevronDown, ChevronUp, PieChart, CreditCard } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
-import { useTravelStore, type Expense, type IconType, type PaymentMethod } from '../store';
+import { useTravelStore, type Expense, type IconType, type PaymentMethod, type ExpenseSplit } from '../store';
 
 const iconLabels: Record<IconType, string> = {
   plane: '飛行機・交通',
@@ -98,6 +98,12 @@ export default function Budget() {
   const [newExpenseIcon, setNewExpenseIcon] = useState<IconType>('ticket');
   const [newExpensePayment, setNewExpensePayment] = useState<PaymentMethod>('credit_card');
   
+  // 複数支払い用の状態
+  const [useMultiplePayments, setUseMultiplePayments] = useState(false);
+  const [newExpenseSplits, setNewExpenseSplits] = useState<ExpenseSplit[]>([
+    { paymentMethod: 'credit_card', amount: 0 }
+  ]);
+  
   // 編集用の状態
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [editExpenseName, setEditExpenseName] = useState('');
@@ -105,6 +111,46 @@ export default function Budget() {
   const [editExpenseDescription, setEditExpenseDescription] = useState('');
   const [editExpenseIcon, setEditExpenseIcon] = useState<IconType>('ticket');
   const [editExpensePayment, setEditExpensePayment] = useState<PaymentMethod>('credit_card');
+
+  // 編集用の複数支払い用の状態
+  const [editUseMultiplePayments, setEditUseMultiplePayments] = useState(false);
+  const [editExpenseSplits, setEditExpenseSplits] = useState<ExpenseSplit[]>([]);
+
+  const handleAddNewSplit = () => {
+    setNewExpenseSplits([...newExpenseSplits, { paymentMethod: 'credit_card', amount: 0 }]);
+  };
+
+  const handleRemoveNewSplit = (index: number) => {
+    setNewExpenseSplits(newExpenseSplits.filter((_, i) => i !== index));
+  };
+
+  const handleNewSplitChange = (index: number, field: keyof ExpenseSplit, value: any) => {
+    const updated = [...newExpenseSplits];
+    if (field === 'amount') {
+      updated[index].amount = parseInt(value, 10) || 0;
+    } else {
+      updated[index].paymentMethod = value as PaymentMethod;
+    }
+    setNewExpenseSplits(updated);
+  };
+
+  const handleAddEditSplit = () => {
+    setEditExpenseSplits([...editExpenseSplits, { paymentMethod: 'credit_card', amount: 0 }]);
+  };
+
+  const handleRemoveEditSplit = (index: number) => {
+    setEditExpenseSplits(editExpenseSplits.filter((_, i) => i !== index));
+  };
+
+  const handleEditSplitChange = (index: number, field: keyof ExpenseSplit, value: any) => {
+    const updated = [...editExpenseSplits];
+    if (field === 'amount') {
+      updated[index].amount = parseInt(value, 10) || 0;
+    } else {
+      updated[index].paymentMethod = value as PaymentMethod;
+    }
+    setEditExpenseSplits(updated);
+  };
 
   const [expandedIcons, setExpandedIcons] = useState<Record<string, boolean>>({});
   const [groupBy, setGroupBy] = useState<'category' | 'payment'>('category');
@@ -133,8 +179,49 @@ export default function Budget() {
     paymentMethod: guessPaymentMethodFromCategory(e.category, e.amount, e.paymentMethod)
   }));
 
+  // 支払い方法別の合計算出ロジック
+  const getTotalsByPaymentMethod = (isPaidFilter?: boolean) => {
+    let yen = 0;
+    let miles = 0;
+    let points = 0;
+    let skyCoin = 0;
+
+    processedExpenses.forEach(e => {
+      if (isPaidFilter !== undefined && e.isPaid !== isPaidFilter) return;
+
+      if (e.splits && e.splits.length > 0) {
+        e.splits.forEach(split => {
+          if (split.paymentMethod === 'miles') {
+            miles += split.amount;
+          } else if (split.paymentMethod === 'points') {
+            points += split.amount;
+          } else if (split.paymentMethod === 'sky_coin') {
+            skyCoin += split.amount;
+          } else {
+            yen += split.amount;
+          }
+        });
+      } else {
+        if (e.paymentMethod === 'miles') {
+          miles += e.amount;
+        } else if (e.paymentMethod === 'points') {
+          points += e.amount;
+        } else if (e.paymentMethod === 'sky_coin') {
+          skyCoin += e.amount;
+        } else {
+          yen += e.amount;
+        }
+      }
+    });
+
+    return { yen, miles, points, skyCoin };
+  };
+
+  const totals = getTotalsByPaymentMethod();
+  const paidTotals = getTotalsByPaymentMethod(true);
+  const unpaidTotals = getTotalsByPaymentMethod(false);
+
   const total = processedExpenses.reduce((acc, curr) => acc + curr.amount, 0);
-  const paidTotal = processedExpenses.filter(e => e.isPaid).reduce((acc, curr) => acc + curr.amount, 0);
 
   // icon ごとにグループ化
   const groupedExpenses = processedExpenses.reduce((acc, expense) => {
@@ -148,11 +235,24 @@ export default function Budget() {
 
   // paymentMethod ごとにグループ化
   const groupedByPayment = processedExpenses.reduce((acc, expense) => {
-    const paymentKey = expense.paymentMethod || 'cash';
-    if (!acc[paymentKey]) {
-      acc[paymentKey] = [];
+    if (expense.splits && expense.splits.length > 0) {
+      expense.splits.forEach(split => {
+        const paymentKey = split.paymentMethod;
+        if (!acc[paymentKey]) {
+          acc[paymentKey] = [];
+        }
+        // 重複を避けて追加
+        if (!acc[paymentKey].some(e => e.id === expense.id)) {
+          acc[paymentKey].push(expense);
+        }
+      });
+    } else {
+      const paymentKey = expense.paymentMethod || 'cash';
+      if (!acc[paymentKey]) {
+        acc[paymentKey] = [];
+      }
+      acc[paymentKey].push(expense);
     }
-    acc[paymentKey].push(expense);
     return acc;
   }, {} as Record<PaymentMethod, Expense[]>);
 
@@ -173,8 +273,21 @@ export default function Budget() {
   // 支払い方法別集計の算出
   const paymentSummary = Object.keys(paymentMethodLabels).map((key) => {
     const methodKey = key as PaymentMethod;
-    const methodExpenses = processedExpenses.filter(e => e.paymentMethod === methodKey);
-    const amount = methodExpenses.reduce((acc, curr) => acc + curr.amount, 0);
+    let amount = 0;
+    
+    processedExpenses.forEach(e => {
+      if (e.splits && e.splits.length > 0) {
+        const split = e.splits.find(s => s.paymentMethod === methodKey);
+        if (split) {
+          amount += split.amount;
+        }
+      } else {
+        if (e.paymentMethod === methodKey) {
+          amount += e.amount;
+        }
+      }
+    });
+
     return {
       methodKey,
       label: paymentMethodLabels[methodKey],
@@ -188,22 +301,33 @@ export default function Budget() {
 
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newExpenseName || !newExpenseAmount) return;
+    if (!newExpenseName || (!useMultiplePayments && !newExpenseAmount)) return;
     
     const color = iconColors[newExpenseIcon] || '#3b82f6';
 
+    let finalAmount = parseInt(newExpenseAmount, 10) || 0;
+    let finalSplits: ExpenseSplit[] | undefined = undefined;
+    let finalPayment = newExpensePayment;
+
+    if (useMultiplePayments) {
+      finalAmount = newExpenseSplits.reduce((sum, s) => sum + s.amount, 0);
+      finalSplits = newExpenseSplits;
+      finalPayment = newExpenseSplits[0]?.paymentMethod || 'credit_card';
+    }
+
     addExpense({
       category: newExpenseName,
-      amount: parseInt(newExpenseAmount, 10),
+      amount: finalAmount,
       color,
       isPaid: false,
       description: newExpenseDescription || undefined,
       icon: newExpenseIcon,
-      paymentMethod: newExpensePayment
+      paymentMethod: finalPayment,
+      splits: finalSplits
     });
     
     // 追加したキーを自動展開
-    const autoExpandKey = groupBy === 'category' ? newExpenseIcon : newExpensePayment;
+    const autoExpandKey = groupBy === 'category' ? newExpenseIcon : finalPayment;
     setExpandedIcons(prev => ({
       ...prev,
       [autoExpandKey]: true
@@ -215,6 +339,8 @@ export default function Budget() {
     setNewExpenseDescription('');
     setNewExpenseIcon('ticket');
     setNewExpensePayment('credit_card');
+    setUseMultiplePayments(false);
+    setNewExpenseSplits([{ paymentMethod: 'credit_card', amount: 0 }]);
   };
 
   const startEditing = (exp: Expense) => {
@@ -224,20 +350,39 @@ export default function Budget() {
     setEditExpenseDescription(exp.description || '');
     setEditExpenseIcon(guessIconFromCategory(exp.category, exp.icon));
     setEditExpensePayment(guessPaymentMethodFromCategory(exp.category, exp.amount, exp.paymentMethod));
+    
+    if (exp.splits && exp.splits.length > 0) {
+      setEditUseMultiplePayments(true);
+      setEditExpenseSplits(exp.splits);
+    } else {
+      setEditUseMultiplePayments(false);
+      setEditExpenseSplits([{ paymentMethod: guessPaymentMethodFromCategory(exp.category, exp.amount, exp.paymentMethod), amount: exp.amount }]);
+    }
   };
 
   const handleUpdate = (e: React.FormEvent, expenseId: string) => {
     e.preventDefault();
-    if (!editExpenseName.trim() || !editExpenseAmount.trim()) return;
+    if (!editExpenseName.trim() || (!editUseMultiplePayments && !editExpenseAmount.trim())) return;
 
     const color = iconColors[editExpenseIcon] || '#3b82f6';
 
+    let finalAmount = parseInt(editExpenseAmount, 10) || 0;
+    let finalSplits: ExpenseSplit[] | undefined = undefined;
+    let finalPayment = editExpensePayment;
+
+    if (editUseMultiplePayments) {
+      finalAmount = editExpenseSplits.reduce((sum, s) => sum + s.amount, 0);
+      finalSplits = editExpenseSplits;
+      finalPayment = editExpenseSplits[0]?.paymentMethod || 'credit_card';
+    }
+
     updateExpense(expenseId, {
       category: editExpenseName,
-      amount: parseInt(editExpenseAmount, 10),
+      amount: finalAmount,
       description: editExpenseDescription || undefined,
       icon: editExpenseIcon,
-      paymentMethod: editExpensePayment,
+      paymentMethod: finalPayment,
+      splits: finalSplits,
       color
     });
     setEditingExpenseId(null);
@@ -293,34 +438,102 @@ export default function Budget() {
                   <option value="map-pin">観光・食事</option>
                 </select>
               </div>
-              <div style={{ flex: 1 }}>
-                <div className="text-xs font-bold text-slate-700 mb-1">支払い方法</div>
-                <select 
-                  value={newExpensePayment} 
-                  onChange={e => setNewExpensePayment(e.target.value as PaymentMethod)}
-                  style={{ width: '100%', padding: '0.6rem 0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'white' }}
-                >
-                  <option value="credit_card">💳 クレジットカード</option>
-                  <option value="points">🪙 ポイント払い</option>
-                  <option value="miles">✈️ マイル払い</option>
-                  <option value="sky_coin">🎫 ANA SKY コイン</option>
-                  <option value="cash">💵 現金払い</option>
-                  <option value="other">❓ その他</option>
-                </select>
-              </div>
             </div>
-            <div>
-              <div className="text-xs font-bold text-slate-700 mb-1">金額（円）</div>
-              <input
-                type="number"
-                placeholder="例: 5000"
-                className="input-field"
-                style={{ marginBottom: 0 }}
-                value={newExpenseAmount}
-                onChange={(e) => setNewExpenseAmount(e.target.value)}
-                required
+
+            {/* 複数支払い方法トグル */}
+            <div className="flex items-center gap-2 py-1">
+              <input 
+                type="checkbox" 
+                id="useMultiplePayments" 
+                checked={useMultiplePayments} 
+                onChange={e => setUseMultiplePayments(e.target.checked)} 
+                className="w-4 h-4 accent-indigo-600 cursor-pointer"
               />
+              <label htmlFor="useMultiplePayments" className="text-xs font-bold text-slate-700 cursor-pointer select-none">
+                複数の支払い方法を組み合わせる（マイル＋クレカなど）
+              </label>
             </div>
+
+            {!useMultiplePayments ? (
+              <div className="flex gap-2">
+                <div style={{ flex: 1 }}>
+                  <div className="text-xs font-bold text-slate-700 mb-1">支払い方法</div>
+                  <select 
+                    value={newExpensePayment} 
+                    onChange={e => setNewExpensePayment(e.target.value as PaymentMethod)}
+                    style={{ width: '100%', padding: '0.6rem 0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'white' }}
+                  >
+                    <option value="credit_card">💳 クレジットカード</option>
+                    <option value="points">🪙 ポイント払い</option>
+                    <option value="miles">✈️ マイル払い</option>
+                    <option value="sky_coin">🎫 ANA SKY コイン</option>
+                    <option value="cash">💵 現金払い</option>
+                    <option value="other">❓ その他</option>
+                  </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div className="text-xs font-bold text-slate-700 mb-1">金額</div>
+                  <input
+                    type="number"
+                    placeholder="例: 5000"
+                    className="input-field"
+                    style={{ marginBottom: 0 }}
+                    value={newExpenseAmount}
+                    onChange={(e) => setNewExpenseAmount(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="glass-panel p-3 bg-slate-50/50 space-y-2" style={{ borderRadius: '12px' }}>
+                <div className="text-xs font-bold text-slate-700 mb-1">支払い方法の内訳</div>
+                {newExpenseSplits.map((split, index) => (
+                  <div key={index} className="flex gap-2 items-center">
+                    <select 
+                      value={split.paymentMethod} 
+                      onChange={e => handleNewSplitChange(index, 'paymentMethod', e.target.value)}
+                      style={{ flex: 1, padding: '0.5rem 0.4rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'white', fontSize: '0.8rem' }}
+                    >
+                      <option value="credit_card">💳 クレジットカード</option>
+                      <option value="points">🪙 ポイント払い</option>
+                      <option value="miles">✈️ マイル払い</option>
+                      <option value="sky_coin">🎫 ANA SKY コイン</option>
+                      <option value="cash">💵 現金払い</option>
+                      <option value="other">❓ その他</option>
+                    </select>
+                    <input
+                      type="number"
+                      placeholder="金額"
+                      style={{ flex: 1, padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)', fontSize: '0.8rem' }}
+                      value={split.amount || ''}
+                      onChange={e => handleNewSplitChange(index, 'amount', e.target.value)}
+                      required
+                    />
+                    {newExpenseSplits.length > 1 && (
+                      <button 
+                        type="button" 
+                        onClick={() => handleRemoveNewSplit(index)} 
+                        className="text-rose-500 p-1 hover:bg-rose-50 rounded"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button 
+                  type="button" 
+                  onClick={handleAddNewSplit} 
+                  className="text-xs text-indigo-600 font-bold flex items-center gap-1 mt-1 hover:underline"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+                >
+                  <Plus size={12} /> 支払い方法を追加
+                </button>
+                <div className="text-xs text-right text-slate-600 font-bold pt-1.5 border-t border-slate-200/50 mt-1">
+                  合計金額: ¥{newExpenseSplits.reduce((sum, s) => sum + s.amount, 0).toLocaleString()}
+                </div>
+              </div>
+            )}
             <div>
               <div className="text-xs font-bold text-slate-700 mb-1">メモ・詳細（任意）</div>
               <textarea
@@ -342,16 +555,59 @@ export default function Budget() {
       {/* Total Overview */}
       <div className="glass-panel" style={{ textAlign: 'center', padding: '1.5rem 1rem', marginBottom: '1.5rem', background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(255, 255, 255, 0.8))' }}>
         <div style={{ color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>予算・費用合計</div>
-        <div style={{ fontSize: '2rem', fontWeight: 800, fontFamily: 'Outfit' }}>
-          ¥{total.toLocaleString()}
+        <div className="flex flex-wrap justify-center items-baseline gap-x-3 gap-y-1">
+          <span style={{ fontSize: '2rem', fontWeight: 800, fontFamily: 'Outfit' }}>
+            ¥{totals.yen.toLocaleString()}
+          </span>
+          {totals.miles > 0 && (
+            <span style={{ fontSize: '1.15rem', fontWeight: 700, color: '#8b5cf6', fontFamily: 'Outfit' }}>
+              + {totals.miles.toLocaleString()}マイル
+            </span>
+          )}
+          {totals.points > 0 && (
+            <span style={{ fontSize: '1.15rem', fontWeight: 700, color: '#f59e0b', fontFamily: 'Outfit' }}>
+              + {totals.points.toLocaleString()}P
+            </span>
+          )}
+          {totals.skyCoin > 0 && (
+            <span style={{ fontSize: '1.15rem', fontWeight: 700, color: '#00579f', fontFamily: 'Outfit' }}>
+              + {totals.skyCoin.toLocaleString()}コイン
+            </span>
+          )}
         </div>
-        <div className="flex justify-center gap-4 mt-2 text-sm">
-          <div><span className="text-slate-500">支払済:</span> <span className="font-bold text-emerald-600">¥{paidTotal.toLocaleString()}</span></div>
-          <div><span className="text-slate-500">未払い:</span> <span className="font-bold text-amber-600">¥{(total - paidTotal).toLocaleString()}</span></div>
+
+        <div className="flex flex-col items-center gap-1 mt-2 text-sm">
+          <div className="flex flex-wrap justify-center gap-x-4 gap-y-1">
+            <div>
+              <span className="text-slate-500">支払済:</span>{' '}
+              <span className="font-bold text-emerald-600">
+                ¥{paidTotals.yen.toLocaleString()}
+                {paidTotals.miles > 0 && ` + ${paidTotals.miles.toLocaleString()}マイル`}
+                {paidTotals.points > 0 && ` + ${paidTotals.points.toLocaleString()}P`}
+                {paidTotals.skyCoin > 0 && ` + ${paidTotals.skyCoin.toLocaleString()}コイン`}
+              </span>
+            </div>
+            <div>
+              <span className="text-slate-500">未払い:</span>{' '}
+              <span className="font-bold text-amber-600">
+                ¥{unpaidTotals.yen.toLocaleString()}
+                {unpaidTotals.miles > 0 && ` + ${unpaidTotals.miles.toLocaleString()}マイル`}
+                {unpaidTotals.points > 0 && ` + ${unpaidTotals.points.toLocaleString()}P`}
+                {unpaidTotals.skyCoin > 0 && ` + ${unpaidTotals.skyCoin.toLocaleString()}コイン`}
+              </span>
+            </div>
+          </div>
         </div>
+
         {selectedTrip.participantsCount && selectedTrip.participantsCount > 1 && (
-          <div className="mt-3 inline-block bg-white/50 px-3 py-1 rounded-full text-sm font-bold text-indigo-700">
-            1人あたり: ¥{Math.round(total / selectedTrip.participantsCount).toLocaleString()}
+          <div className="mt-3 inline-block bg-white/50 px-3 py-1 rounded-full text-xs font-bold text-indigo-700">
+            1人あたり:{' '}
+            <span>
+              ¥{Math.round(totals.yen / selectedTrip.participantsCount).toLocaleString()}
+              {totals.miles > 0 && ` + ${Math.round(totals.miles / selectedTrip.participantsCount).toLocaleString()}マイル`}
+              {totals.points > 0 && ` + ${Math.round(totals.points / selectedTrip.participantsCount).toLocaleString()}P`}
+              {totals.skyCoin > 0 && ` + ${Math.round(totals.skyCoin / selectedTrip.participantsCount).toLocaleString()}コイン`}
+            </span>
           </div>
         )}
       </div>
@@ -401,7 +657,19 @@ export default function Budget() {
                 iconElement = <span style={{ fontSize: '18px' }}>{emoji}</span>;
               }
               
-              const catTotal = groupExpenses.reduce((acc, curr) => acc + curr.amount, 0);
+              let catTotal = 0;
+              if (groupBy === 'category') {
+                catTotal = groupExpenses.reduce((acc, curr) => acc + curr.amount, 0);
+              } else {
+                const paymentKey = key as PaymentMethod;
+                catTotal = groupExpenses.reduce((acc, curr) => {
+                  if (curr.splits && curr.splits.length > 0) {
+                    const split = curr.splits.find(s => s.paymentMethod === paymentKey);
+                    return acc + (split ? split.amount : 0);
+                  }
+                  return acc + curr.amount;
+                }, 0);
+              }
 
               return (
                 <div key={key} className="glass-panel" style={{ padding: 0, overflow: 'hidden', borderRadius: '16px' }}>
@@ -465,19 +733,10 @@ export default function Budget() {
                                       required
                                     />
                                   </div>
-                                  <div style={{ flex: 1 }}>
-                                    <div className="text-xs font-bold text-slate-700 mb-1">金額（円）</div>
-                                    <input 
-                                      type="number" 
-                                      value={editExpenseAmount}
-                                      onChange={(e) => setEditExpenseAmount(e.target.value)}
-                                      style={{ width: '100%', padding: '0.4rem 0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)', fontSize: '0.875rem' }}
-                                      required
-                                    />
-                                  </div>
                                 </div>
-                                <div className="flex gap-2">
-                                  <div style={{ flex: 1 }}>
+
+                                <div className="flex flex-col gap-2">
+                                  <div>
                                     <div className="text-xs font-bold text-slate-700 mb-1">アイコン</div>
                                     <select 
                                       value={editExpenseIcon} 
@@ -492,22 +751,100 @@ export default function Budget() {
                                       <option value="map-pin">観光・食事</option>
                                     </select>
                                   </div>
-                                  <div style={{ flex: 1 }}>
-                                    <div className="text-xs font-bold text-slate-700 mb-1">支払い方法</div>
-                                    <select 
-                                      value={editExpensePayment} 
-                                      onChange={e => setEditExpensePayment(e.target.value as PaymentMethod)}
-                                      style={{ width: '100%', padding: '0.4rem 0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'white', fontSize: '0.875rem' }}
-                                    >
-                                      <option value="credit_card">💳 クレジットカード</option>
-                                      <option value="points">🪙 ポイント払い</option>
-                                      <option value="miles">✈️ マイル払い</option>
-                                      <option value="sky_coin">🎫 ANA SKY コイン</option>
-                                      <option value="cash">💵 現金払い</option>
-                                      <option value="other">❓ その他</option>
-                                    </select>
-                                  </div>
                                 </div>
+
+                                {/* 編集フォーム内の複数支払い方法トグル */}
+                                <div className="flex items-center gap-2 py-1">
+                                  <input 
+                                    type="checkbox" 
+                                    id={`editUseMultiplePayments-${exp.id}`} 
+                                    checked={editUseMultiplePayments} 
+                                    onChange={e => setEditUseMultiplePayments(e.target.checked)} 
+                                    className="w-4 h-4 accent-indigo-600 cursor-pointer"
+                                  />
+                                  <label htmlFor={`editUseMultiplePayments-${exp.id}`} className="text-xs font-bold text-slate-700 cursor-pointer select-none">
+                                    複数の支払い方法を組み合わせる
+                                  </label>
+                                </div>
+
+                                {!editUseMultiplePayments ? (
+                                  <div className="flex gap-2">
+                                    <div style={{ flex: 1 }}>
+                                      <div className="text-xs font-bold text-slate-700 mb-1">支払い方法</div>
+                                      <select 
+                                        value={editExpensePayment} 
+                                        onChange={e => setEditExpensePayment(e.target.value as PaymentMethod)}
+                                        style={{ width: '100%', padding: '0.4rem 0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'white', fontSize: '0.875rem' }}
+                                      >
+                                        <option value="credit_card">💳 クレジットカード</option>
+                                        <option value="points">🪙 ポイント払い</option>
+                                        <option value="miles">✈️ マイル払い</option>
+                                        <option value="sky_coin">🎫 ANA SKY コイン</option>
+                                        <option value="cash">💵 現金払い</option>
+                                        <option value="other">❓ その他</option>
+                                      </select>
+                                    </div>
+                                    <div style={{ flex: 1 }}>
+                                      <div className="text-xs font-bold text-slate-700 mb-1">金額</div>
+                                      <input 
+                                        type="number" 
+                                        value={editExpenseAmount}
+                                        onChange={(e) => setEditExpenseAmount(e.target.value)}
+                                        style={{ width: '100%', padding: '0.4rem 0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)', fontSize: '0.875rem' }}
+                                        required
+                                      />
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="glass-panel p-3 bg-slate-50/50 space-y-2" style={{ borderRadius: '12px' }}>
+                                    <div className="text-xs font-bold text-slate-700 mb-1">支払い方法の内訳</div>
+                                    {editExpenseSplits.map((split, index) => (
+                                      <div key={index} className="flex gap-2 items-center">
+                                        <select 
+                                          value={split.paymentMethod} 
+                                          onChange={e => handleEditSplitChange(index, 'paymentMethod', e.target.value)}
+                                          style={{ flex: 1, padding: '0.4rem 0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'white', fontSize: '0.8rem' }}
+                                        >
+                                          <option value="credit_card">💳 クレジットカード</option>
+                                          <option value="points">🪙 ポイント払い</option>
+                                          <option value="miles">✈️ マイル払い</option>
+                                          <option value="sky_coin">🎫 ANA SKY コイン</option>
+                                          <option value="cash">💵 現金払い</option>
+                                          <option value="other">❓ その他</option>
+                                        </select>
+                                        <input
+                                          type="number"
+                                          placeholder="金額"
+                                          style={{ flex: 1, padding: '0.4rem 0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)', fontSize: '0.8rem' }}
+                                          value={split.amount || ''}
+                                          onChange={e => handleEditSplitChange(index, 'amount', e.target.value)}
+                                          required
+                                        />
+                                        {editExpenseSplits.length > 1 && (
+                                          <button 
+                                            type="button" 
+                                            onClick={() => handleRemoveEditSplit(index)} 
+                                            className="text-rose-500 p-1 hover:bg-rose-50 rounded"
+                                            style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+                                          >
+                                            <Trash2 size={16} />
+                                          </button>
+                                        )}
+                                      </div>
+                                    ))}
+                                    <button 
+                                      type="button" 
+                                      onClick={handleAddEditSplit} 
+                                      className="text-xs text-indigo-600 font-bold flex items-center gap-1 mt-1 hover:underline"
+                                      style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+                                    >
+                                      <Plus size={12} /> 支払い方法を追加
+                                    </button>
+                                    <div className="text-xs text-right text-slate-600 font-bold pt-1.5 border-t border-slate-200/50 mt-1">
+                                      合計金額: ¥{editExpenseSplits.reduce((sum, s) => sum + s.amount, 0).toLocaleString()}
+                                    </div>
+                                  </div>
+                                )}
                                 <div>
                                   <div className="text-xs font-bold text-slate-700 mb-1">メモ・詳細（任意）</div>
                                   <textarea
@@ -539,9 +876,21 @@ export default function Budget() {
                                           />
                                           <span className="text-xs text-slate-500">{exp.isPaid ? '支払済' : '未払い'}</span>
                                         </label>
-                                        <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold">
-                                          {paymentIcon} {paymentLabel}
-                                        </span>
+                                        {exp.splits && exp.splits.length > 0 ? (
+                                          exp.splits.map((split, sIdx) => {
+                                            const sIcon = paymentMethodIcons[split.paymentMethod];
+                                            const sLabel = paymentMethodLabels[split.paymentMethod];
+                                            return (
+                                              <span key={sIdx} className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold">
+                                                {sIcon} {sLabel}: ¥{split.amount.toLocaleString()}
+                                              </span>
+                                            );
+                                          })
+                                        ) : (
+                                          <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold">
+                                            {paymentIcon} {paymentLabel}
+                                          </span>
+                                        )}
                                       </div>
                                     </div>
                                   </div>
@@ -719,6 +1068,13 @@ export default function Budget() {
                 {/* 各支払い方法の詳細リスト */}
                 <div className="grid grid-cols-2 gap-2">
                   {paymentSummary.map((item) => {
+                    let unit = '円';
+                    if (item.methodKey === 'miles') unit = 'マイル';
+                    else if (item.methodKey === 'points') unit = 'P';
+                    else if (item.methodKey === 'sky_coin') unit = 'コイン';
+                    
+                    const displayAmount = unit === '円' ? `¥${item.amount.toLocaleString()}` : `${item.amount.toLocaleString()} ${unit}`;
+
                     return (
                       <div key={item.methodKey} className="flex items-center justify-between p-1.5 rounded bg-slate-50 border border-slate-100">
                         <div className="flex items-center gap-1.5 min-w-0">
@@ -726,7 +1082,7 @@ export default function Budget() {
                           <span className="font-bold text-slate-700 truncate">{item.label}</span>
                         </div>
                         <div className="text-right shrink-0 font-bold text-slate-800">
-                          <span>¥{item.amount.toLocaleString()}</span>
+                          <span>{displayAmount}</span>
                           <span className="text-[9px] text-slate-400 ml-1 font-bold">({item.percentage}%)</span>
                         </div>
                       </div>

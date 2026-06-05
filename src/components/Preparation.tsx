@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTravelStore, type PreparationTask } from '../store';
 import { CalendarClock, CheckCircle, Circle, Play, Info, Sparkles, Plus, Trash2, Edit2, Camera, X } from 'lucide-react';
 import { set, get } from 'idb-keyval';
+import { Navigate } from 'react-router-dom';
 
 function TaskItem({ 
   task, 
@@ -16,7 +17,8 @@ function TaskItem({
   editTaskTitle, setEditTaskTitle,
   editTaskDate, setEditTaskDate,
   editTaskNotes, setEditTaskNotes,
-  editTaskUrl, setEditTaskUrl
+  editTaskUrls,
+  handleAddUrlField, handleRemoveUrlField, handleUrlChange
 }: { 
   task: PreparationTask, 
   overdue: boolean,
@@ -30,8 +32,12 @@ function TaskItem({
   editTaskTitle: string, setEditTaskTitle: (v: string) => void,
   editTaskDate: string, setEditTaskDate: (v: string) => void,
   editTaskNotes: string, setEditTaskNotes: (v: string) => void,
-  editTaskUrl: string, setEditTaskUrl: (v: string) => void
+  editTaskUrls: string[],
+  handleAddUrlField: (isEdit: boolean) => void,
+  handleRemoveUrlField: (index: number, isEdit: boolean) => void,
+  handleUrlChange: (index: number, value: string, isEdit: boolean) => void
 }) {
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
 
@@ -105,12 +111,95 @@ function TaskItem({
                 <input type="date" className="input-field" style={{ marginBottom: 0 }} value={editTaskDate} onChange={e => setEditTaskDate(e.target.value)} />
               </div>
               <div>
-                <div className="text-xs font-bold text-slate-700 mb-1">関連URL・リンク（任意）</div>
-                <input type="text" placeholder="例: https://travel.rakuten.co.jp/" className="input-field" style={{ marginBottom: 0 }} value={editTaskUrl} onChange={e => setEditTaskUrl(e.target.value)} />
+                <div className="text-xs font-bold text-slate-700 mb-1">関連URL・リンク（複数追加可）</div>
+                <div className="space-y-2">
+                  {editTaskUrls.map((url, idx) => (
+                    <div key={idx} className="flex gap-2 items-center">
+                      <input
+                        type="text"
+                        placeholder="例: https://travel.rakuten.co.jp/"
+                        className="input-field"
+                        style={{ marginBottom: 0, flex: 1 }}
+                        value={url}
+                        onChange={e => handleUrlChange(idx, e.target.value, true)}
+                      />
+                      {editTaskUrls.length > 1 && (
+                        <button 
+                          type="button" 
+                          onClick={() => handleRemoveUrlField(idx, true)}
+                          className="btn-secondary" 
+                          style={{ padding: '0.6rem 0.8rem', color: 'var(--danger)', borderColor: 'var(--danger)' }}
+                          title="削除"
+                        >
+                          ✕
+                        </button>
+                      )}
+                      {idx === editTaskUrls.length - 1 && (
+                        <button 
+                          type="button" 
+                          onClick={() => handleAddUrlField(true)}
+                          className="btn-primary" 
+                          style={{ padding: '0.6rem 0.8rem' }}
+                          title="追加"
+                        >
+                          ＋
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
               <div>
                 <div className="text-xs font-bold text-slate-700 mb-1">メモ・詳細（任意）</div>
                 <textarea className="input-field" style={{ marginBottom: 0, minHeight: '60px' }} value={editTaskNotes} onChange={e => setEditTaskNotes(e.target.value)} />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-slate-700 mb-1">スクリーンショット（任意）</div>
+                {imageUrl ? (
+                  <div className="flex flex-col gap-1.5 p-2 bg-slate-50 border border-slate-200 rounded-lg" style={{ width: 'fit-content' }}>
+                    <div style={{ position: 'relative', width: '120px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--glass-border)' }}>
+                      <img src={imageUrl} alt="添付プレビュー" style={{ width: '100%', height: '80px', objectFit: 'cover' }} />
+                    </div>
+                    <input 
+                      ref={fileInputRef}
+                      type="file" 
+                      accept="image/*" 
+                      style={{ position: 'absolute', width: 0, height: 0, opacity: 0, zIndex: -1 }} 
+                      onChange={handleImageUpload} 
+                    />
+                    <div className="flex gap-2 text-xs">
+                      <button 
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        style={{ background: 'none', border: 'none', color: 'var(--accent-color)', cursor: 'pointer', padding: 0, fontSize: 'inherit' }}
+                      >
+                        変更
+                      </button>
+                      <button type="button" onClick={handleImageRemove} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: 0, fontSize: 'inherit' }}>
+                        削除
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'inline-block' }}>
+                    <input 
+                      ref={fileInputRef}
+                      type="file" 
+                      accept="image/*" 
+                      style={{ position: 'absolute', width: 0, height: 0, opacity: 0, zIndex: -1 }} 
+                      onChange={handleImageUpload} 
+                    />
+                    <button 
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex items-center gap-1.5 text-slate-500 hover:text-indigo-600 cursor-pointer text-xs transition-colors" 
+                      style={{ display: 'inline-flex', padding: '0.4rem 0.8rem', border: '1px dashed #cbd5e1', borderRadius: '8px', background: '#f8fafc' }}
+                    >
+                      <Camera size={14} />
+                      <span>スクリーンショット画像を添付</span>
+                    </button>
+                  </div>
+                )}
               </div>
               <div className="flex gap-2 mt-2">
                 <button type="submit" className="btn-primary flex-1 py-2 text-sm">保存</button>
@@ -163,19 +252,22 @@ function TaskItem({
               )}
 
               {/* 関連URL表示 */}
-              {task.url && (
-                <div className="mt-2.5">
-                  <a 
-                    href={task.url.startsWith('http') ? task.url : `https://${task.url}`} 
-                    target="_blank" 
-                    rel="noopener noreferrer" 
-                    className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors inline-flex p-1.5 rounded-lg bg-indigo-50/50 hover:bg-indigo-50 border border-indigo-100"
-                  >
-                    <span>🔗</span>
-                    <span>関連リンクを開く</span>
-                  </a>
+              {((task.urls && task.urls.length > 0) || task.url) ? (
+                <div className="mt-2.5 flex flex-wrap gap-2">
+                  {(task.urls || (task.url ? [task.url] : [])).map((url, uIdx) => (
+                    <a 
+                      key={uIdx}
+                      href={url.startsWith('http') ? url : `https://${url}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors p-1.5 rounded-lg bg-indigo-50/50 hover:bg-indigo-50 border border-indigo-100"
+                    >
+                      <span>🔗</span>
+                      <span>関連リンク {uIdx + 1} を開く</span>
+                    </a>
+                  ))}
                 </div>
-              )}
+              ) : null}
 
               {/* スクリーンショット添付 UI */}
               <div style={{ marginTop: '0.75rem' }}>
@@ -194,22 +286,49 @@ function TaskItem({
                       <span>Googleドライブ同期・保管対象</span>
                     </div>
 
+                    <input 
+                      ref={fileInputRef}
+                      type="file" 
+                      accept="image/*" 
+                      style={{ position: 'absolute', width: 0, height: 0, opacity: 0, zIndex: -1 }} 
+                      onChange={handleImageUpload} 
+                    />
                     <div className="flex gap-2 text-xs" style={{ marginTop: '0.25rem' }}>
-                      <label style={{ color: 'var(--accent-color)', cursor: 'pointer' }}>
-                        <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} />
+                      <button 
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        style={{ background: 'none', border: 'none', color: 'var(--accent-color)', cursor: 'pointer', padding: 0, fontSize: 'inherit' }}
+                      >
                         変更
-                      </label>
-                      <button onClick={handleImageRemove} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: 0 }}>
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={handleImageRemove} 
+                        style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: 0, fontSize: 'inherit' }}
+                      >
                         削除
                       </button>
                     </div>
                   </div>
                 ) : (
-                  <label className="flex items-center gap-1 text-slate-400 hover:text-indigo-500 cursor-pointer text-xs transition-colors" style={{ display: 'inline-flex', padding: '0.25rem 0.5rem', background: 'rgba(0,0,0,0.03)', borderRadius: '6px' }}>
-                    <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} />
-                    <Camera size={14} />
-                    <span>スクショを追加</span>
-                  </label>
+                  <div style={{ display: 'inline-block' }}>
+                    <input 
+                      ref={fileInputRef}
+                      type="file" 
+                      accept="image/*" 
+                      style={{ position: 'absolute', width: 0, height: 0, opacity: 0, zIndex: -1 }} 
+                      onChange={handleImageUpload} 
+                    />
+                    <button 
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex items-center gap-1 text-slate-400 hover:text-indigo-500 cursor-pointer text-xs transition-colors" 
+                      style={{ display: 'inline-flex', padding: '0.25rem 0.5rem', background: 'rgba(0,0,0,0.03)', border: 'none', borderRadius: '6px' }}
+                    >
+                      <Camera size={14} />
+                      <span>スクショを追加</span>
+                    </button>
+                  </div>
                 )}
               </div>
             </>
@@ -268,21 +387,50 @@ function TaskItem({
 export default function Preparation() {
   const { trips, selectedTripId, generateAutoTasks, updatePreparationTask, deletePreparationTask, addPreparationTask } = useTravelStore();
   const currentTrip = trips.find(t => t.id === selectedTripId);
+  const newTaskFileInputRef = React.useRef<HTMLInputElement>(null);
   
-  const [showAddForm, setShowAddForm] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDate, setNewTaskDate] = useState('');
   const [newTaskNotes, setNewTaskNotes] = useState('');
-  const [newTaskUrl, setNewTaskUrl] = useState('');
   const [newTaskImage, setNewTaskImage] = useState<string | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
 
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editTaskTitle, setEditTaskTitle] = useState('');
   const [editTaskDate, setEditTaskDate] = useState('');
   const [editTaskNotes, setEditTaskNotes] = useState('');
-  const [editTaskUrl, setEditTaskUrl] = useState('');
+  const [newTaskUrls, setNewTaskUrls] = useState<string[]>(['']);
+  const [editTaskUrls, setEditTaskUrls] = useState<string[]>(['']);
 
-  if (!currentTrip) return <div>旅行を選択してください</div>;
+  const handleAddUrlField = (isEdit: boolean) => {
+    if (isEdit) {
+      setEditTaskUrls([...editTaskUrls, '']);
+    } else {
+      setNewTaskUrls([...newTaskUrls, '']);
+    }
+  };
+
+  const handleRemoveUrlField = (index: number, isEdit: boolean) => {
+    if (isEdit) {
+      setEditTaskUrls(editTaskUrls.filter((_, i) => i !== index));
+    } else {
+      setNewTaskUrls(newTaskUrls.filter((_, i) => i !== index));
+    }
+  };
+
+  const handleUrlChange = (index: number, value: string, isEdit: boolean) => {
+    if (isEdit) {
+      const updated = [...editTaskUrls];
+      updated[index] = value;
+      setEditTaskUrls(updated);
+    } else {
+      const updated = [...newTaskUrls];
+      updated[index] = value;
+      setNewTaskUrls(updated);
+    }
+  };
+
+  if (!currentTrip) return <Navigate to="/" replace />;
 
   const tasks = currentTrip.preparationTasks || [];
   
@@ -330,13 +478,16 @@ export default function Preparation() {
       await set(imageKey, newTaskImage);
     }
 
+    const filteredUrls = newTaskUrls.map(u => u.trim()).filter(Boolean);
+
     addPreparationTask({
       title: newTaskTitle,
       category: 'その他',
       targetDate: newTaskDate || null,
       status: 'pending',
       notes: newTaskNotes,
-      url: newTaskUrl.trim() || undefined,
+      urls: filteredUrls,
+      url: filteredUrls[0] || undefined,
       isAutoGenerated: false,
       imageKey
     });
@@ -344,7 +495,7 @@ export default function Preparation() {
     setNewTaskTitle('');
     setNewTaskDate('');
     setNewTaskNotes('');
-    setNewTaskUrl('');
+    setNewTaskUrls(['']);
     setNewTaskImage(null);
     setShowAddForm(false);
   };
@@ -354,17 +505,23 @@ export default function Preparation() {
     setEditTaskTitle(task.title);
     setEditTaskDate(task.targetDate || '');
     setEditTaskNotes(task.notes || '');
-    setEditTaskUrl(task.url || '');
+    if (task.urls && task.urls.length > 0) {
+      setEditTaskUrls(task.urls);
+    } else {
+      setEditTaskUrls(task.url ? [task.url] : ['']);
+    }
   };
 
   const handleUpdateTask = (e: React.FormEvent, taskId: string) => {
     e.preventDefault();
     if (!editTaskTitle.trim()) return;
+    const filteredUrls = editTaskUrls.map(u => u.trim()).filter(Boolean);
     updatePreparationTask(taskId, {
       title: editTaskTitle,
       targetDate: editTaskDate || null,
       notes: editTaskNotes,
-      url: editTaskUrl.trim() || undefined
+      urls: filteredUrls,
+      url: filteredUrls[0] || undefined
     });
     setEditingTaskId(null);
   };
@@ -422,8 +579,10 @@ export default function Preparation() {
                 setEditTaskDate={setEditTaskDate}
                 editTaskNotes={editTaskNotes}
                 setEditTaskNotes={setEditTaskNotes}
-                editTaskUrl={editTaskUrl}
-                setEditTaskUrl={setEditTaskUrl}
+                editTaskUrls={editTaskUrls}
+                handleAddUrlField={handleAddUrlField}
+                handleRemoveUrlField={handleRemoveUrlField}
+                handleUrlChange={handleUrlChange}
               />
             );
           })
@@ -459,15 +618,43 @@ export default function Preparation() {
             />
           </div>
           <div>
-            <div className="text-sm font-bold text-slate-700 mb-1">関連URL（任意）</div>
-            <input
-              type="text"
-              placeholder="例: https://travel.rakuten.co.jp/"
-              className="input-field"
-              style={{ marginBottom: 0 }}
-              value={newTaskUrl}
-              onChange={e => setNewTaskUrl(e.target.value)}
-            />
+            <div className="text-sm font-bold text-slate-700 mb-1">関連URL・リンク（複数追加可）</div>
+            <div className="space-y-2">
+              {newTaskUrls.map((url, idx) => (
+                <div key={idx} className="flex gap-2 items-center">
+                  <input
+                    type="text"
+                    placeholder="例: https://travel.rakuten.co.jp/"
+                    className="input-field"
+                    style={{ marginBottom: 0, flex: 1 }}
+                    value={url}
+                    onChange={e => handleUrlChange(idx, e.target.value, false)}
+                  />
+                  {newTaskUrls.length > 1 && (
+                    <button 
+                      type="button" 
+                      onClick={() => handleRemoveUrlField(idx, false)}
+                      className="btn-secondary" 
+                      style={{ padding: '0.6rem 0.8rem', color: 'var(--danger)', borderColor: 'var(--danger)' }}
+                      title="削除"
+                    >
+                      ✕
+                    </button>
+                  )}
+                  {idx === newTaskUrls.length - 1 && (
+                    <button 
+                      type="button" 
+                      onClick={() => handleAddUrlField(false)}
+                      className="btn-primary" 
+                      style={{ padding: '0.6rem 0.8rem' }}
+                      title="追加"
+                    >
+                      ＋
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
           <div>
             <div className="text-sm font-bold text-slate-700 mb-1">メモ・詳細（任意）</div>
@@ -488,22 +675,45 @@ export default function Preparation() {
                 <div style={{ position: 'relative', width: '120px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--glass-border)' }}>
                   <img src={newTaskImage} alt="添付プレビュー" style={{ width: '100%', height: '80px', objectFit: 'cover' }} />
                 </div>
+                <input 
+                  ref={newTaskFileInputRef}
+                  type="file" 
+                  accept="image/*" 
+                  style={{ position: 'absolute', width: 0, height: 0, opacity: 0, zIndex: -1 }} 
+                  onChange={handleNewTaskImageUpload} 
+                />
                 <div className="flex gap-2 text-xs">
-                  <label style={{ color: 'var(--accent-color)', cursor: 'pointer' }}>
-                    <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleNewTaskImageUpload} />
+                  <button 
+                    type="button"
+                    onClick={() => newTaskFileInputRef.current?.click()}
+                    style={{ background: 'none', border: 'none', color: 'var(--accent-color)', cursor: 'pointer', padding: 0, fontSize: 'inherit' }}
+                  >
                     変更
-                  </label>
-                  <button type="button" onClick={() => setNewTaskImage(null)} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: 0 }}>
+                  </button>
+                  <button type="button" onClick={() => setNewTaskImage(null)} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: 0, fontSize: 'inherit' }}>
                     削除
                   </button>
                 </div>
               </div>
             ) : (
-              <label className="flex items-center gap-1.5 text-slate-500 hover:text-indigo-600 cursor-pointer text-xs transition-colors" style={{ display: 'inline-flex', padding: '0.4rem 0.8rem', border: '1px dashed #cbd5e1', borderRadius: '8px', background: '#f8fafc' }}>
-                <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleNewTaskImageUpload} />
-                <Camera size={14} />
-                <span>スクリーンショット画像を添付</span>
-              </label>
+              <div style={{ display: 'inline-block' }}>
+                <input 
+                  ref={newTaskFileInputRef}
+                  type="file" 
+                  accept="image/*" 
+                  style={{ position: 'absolute', width: 0, height: 0, opacity: 0, zIndex: -1 }} 
+                  onChange={handleNewTaskImageUpload} 
+                />
+                <button 
+                  type="button"
+                  onClick={() => newTaskFileInputRef.current?.click()}
+                  className="flex items-center gap-1.5 text-slate-500 hover:text-indigo-600 cursor-pointer text-xs transition-colors" 
+                  style={{ display: 'inline-flex', padding: '0.4rem 0.8rem', border: '1px dashed #cbd5e1', borderRadius: '8px', background: '#f8fafc' }}
+                >
+                  <Camera size={14} />
+                  <span>スクリーンショット画像を添付</span>
+                </button>
+              </div>
             )}
           </div>
 
@@ -516,7 +726,7 @@ export default function Preparation() {
               setNewTaskTitle('');
               setNewTaskDate('');
               setNewTaskNotes('');
-              setNewTaskUrl('');
+              setNewTaskUrls(['']);
               setNewTaskImage(null);
             }} className="btn-secondary flex-1">
               キャンセル

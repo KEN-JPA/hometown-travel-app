@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useTravelStore } from '../store';
 import { Image as ImageIcon, Upload, Camera } from 'lucide-react';
 import { set, get, del } from 'idb-keyval';
+import { Navigate } from 'react-router-dom';
 
 export default function Memories() {
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
   const trips = useTravelStore((state) => state.trips);
   const selectedTripId = useTravelStore((state) => state.selectedTripId);
   const selectedTrip = trips.find(t => t.id === selectedTripId);
@@ -34,7 +36,7 @@ export default function Memories() {
   }, [selectedTrip]);
 
   if (!selectedTrip) {
-    return <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>旅行を選択してください</div>;
+    return <Navigate to="/" replace />;
   }
 
   const memories = selectedTrip.memories || [];
@@ -95,8 +97,18 @@ export default function Memories() {
         </div>
       </div>
 
-      <label className="glass-panel flex flex-col items-center justify-center mb-8" style={{ padding: '2rem', cursor: 'pointer', border: '2px dashed var(--accent-color)', background: 'rgba(255, 140, 148, 0.05)' }}>
-        <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleUpload} />
+      <div 
+        onClick={() => fileInputRef.current?.click()}
+        className="glass-panel flex flex-col items-center justify-center mb-8" 
+        style={{ padding: '2rem', cursor: 'pointer', border: '2px dashed var(--accent-color)', background: 'rgba(255, 140, 148, 0.05)' }}
+      >
+        <input 
+          ref={fileInputRef}
+          type="file" 
+          accept="image/*" 
+          style={{ position: 'absolute', width: 0, height: 0, opacity: 0, zIndex: -1 }} 
+          onChange={handleUpload} 
+        />
         <div style={{ background: 'var(--accent-color)', color: 'white', padding: '1rem', borderRadius: '50%', marginBottom: '1rem', boxShadow: '0 4px 12px var(--accent-glow)' }}>
           <Upload size={24} />
         </div>
@@ -105,7 +117,7 @@ export default function Memories() {
           旅行中の楽しかった思い出や、<br/>
           美味しかったご飯の写真を残しましょう！
         </span>
-      </label>
+      </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         {memories.map(mem => (

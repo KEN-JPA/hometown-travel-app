@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Plane, Car, Home, Building2, Ticket, MapPin, Plus, FolderPlus, Map } from 'lucide-react';
 import { useTravelStore, type IconType } from '../store';
+import { Navigate } from 'react-router-dom';
 
 const getIcon = (type: IconType) => {
   switch (type) {
@@ -40,7 +41,7 @@ export default function Itinerary() {
   const [newEventIcon, setNewEventIcon] = useState<IconType>('map-pin');
 
   if (!selectedTrip) {
-    return <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>旅行を選択してください</div>;
+    return <Navigate to="/" replace />;
   }
 
   const categories = selectedTrip.itineraryCategories;

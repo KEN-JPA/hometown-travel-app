@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTravelStore } from '../store';
 import { CheckSquare, Square, Trash2, Plus, Package, Edit2 } from 'lucide-react';
+import { Navigate } from 'react-router-dom';
 
 export default function PackingList() {
   const trips = useTravelStore((state) => state.trips);
@@ -29,7 +30,7 @@ export default function PackingList() {
   const [editItemDescription, setEditItemDescription] = useState('');
 
   if (!selectedTrip) {
-    return <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>旅行を選択してください</div>;
+    return <Navigate to="/" replace />;
   }
 
   const allItems = selectedTrip.packingList || [];

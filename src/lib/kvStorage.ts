@@ -1,6 +1,8 @@
 import type { StateStorage } from 'zustand/middleware';
 
 // カスタムストレージ: クラウド（Vercel KV）とローカルストレージを同期する
+export let lastSavedTimestamp = 0;
+
 export const kvStorage: StateStorage = {
   getItem: async (name: string): Promise<string | null> => {
     try {
@@ -19,6 +21,7 @@ export const kvStorage: StateStorage = {
     return localStorage.getItem(name);
   },
   setItem: async (name: string, value: string): Promise<void> => {
+    lastSavedTimestamp = Date.now();
     // ローカルにも保存しておく（オフライン時のキャッシュ用）
     localStorage.setItem(name, value); 
     try {

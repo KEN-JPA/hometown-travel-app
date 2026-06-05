@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plane, Car, Building2, Ticket, Copy, ExternalLink, MapPin, Home, Upload, X, Plus } from 'lucide-react';
 import { useTravelStore, type IconType, type Booking } from '../store';
 import { set, get } from 'idb-keyval';
+import { Navigate } from 'react-router-dom';
 
 const getIcon = (type: IconType) => {
   switch (type) {
@@ -288,7 +289,7 @@ export default function Bookings() {
   const [newIcon, setNewIcon] = useState<IconType>('ticket');
 
   if (!selectedTrip) {
-    return <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>旅行を選択してください</div>;
+    return <Navigate to="/" replace />;
   }
 
   const bookings = selectedTrip.bookings;

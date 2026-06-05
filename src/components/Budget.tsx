@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, Edit2 } from 'lucide-react';
+import { Navigate } from 'react-router-dom';
 import { useTravelStore, type Expense } from '../store';
 
 export default function Budget() {
@@ -23,7 +24,7 @@ export default function Budget() {
   const [editExpenseDescription, setEditExpenseDescription] = useState('');
 
   if (!selectedTrip) {
-    return <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>旅行を選択してください</div>;
+    return <Navigate to="/" replace />;
   }
 
   const expenses = selectedTrip.expenses;

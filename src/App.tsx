@@ -12,6 +12,7 @@ import Preparation from './components/Preparation';
 import AIChatbot from './components/AIChatbot';
 import SearchModal from './components/SearchModal';
 import { useTravelStore } from './store';
+import { lastSavedTimestamp } from './lib/kvStorage';
 import './index.css';
 
 const VALID_PASSWORDS = ['0702', '7842', '1107', '0615'];
@@ -161,16 +162,14 @@ function Layout({ children }: { children: React.ReactNode }) {
 function App() {
   const _hasHydrated = useTravelStore((state) => state._hasHydrated);
 
-  // アプリ起動（マウント）時に必ず選択状態をクリアして旅行一覧（トップ）を表示する
-  useEffect(() => {
-    if (_hasHydrated) {
-      useTravelStore.getState().selectTrip(null);
-    }
-  }, [_hasHydrated]);
+
 
   // 5秒おきにサーバーから最新データを取得して同期する (リアルタイム共有) - フック順序規則遵守のためここに移動
   useEffect(() => {
     const interval = setInterval(async () => {
+      if (Date.now() - lastSavedTimestamp < 10000) {
+        return;
+      }
       try {
         const res = await fetch('/api/get-trips');
         if (res.ok) {

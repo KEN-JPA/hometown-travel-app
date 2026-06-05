@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, ChevronRight, X, GripVertical, Download, Upload, Settings } from 'lucide-react';
+import { Plus, ChevronRight, X, GripVertical, Download, Upload, Settings, Trash2 } from 'lucide-react';
 import { useTravelStore } from '../store';
 import { get, set, del } from 'idb-keyval';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
@@ -21,15 +21,18 @@ function SortableTripItem({ trip, onSelect }: { trip: any, onSelect: (id: string
   return (
     <div 
       ref={setNodeRef} 
-      {...attributes} 
-      {...listeners} 
-      style={{ ...style, cursor: 'grab' }} 
+      style={{ ...style, cursor: 'pointer' }} 
       className="glass-card" 
       onClick={() => onSelect(trip.id)}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <div style={{ color: 'var(--text-secondary)' }}>
+          <div 
+            {...attributes} 
+            {...listeners} 
+            style={{ color: 'var(--text-secondary)', cursor: 'grab', display: 'flex', alignItems: 'center', padding: '0.25rem' }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <GripVertical size={20} />
           </div>
           <div>
@@ -765,11 +768,46 @@ export default function Dashboard() {
       {/* Hero Section */}
       <div className="glass-panel" style={{ position: 'relative', overflow: 'hidden', border: 'none', background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(255, 255, 255, 0.7))', borderBottom: '1px solid var(--accent-glow)' }}>
         <div style={{ position: 'relative', zIndex: 1 }}>
-          <div className="flex items-center justify-between mb-1">
-            <h2 className="title" style={{ fontSize: '1.75rem' }}>旅行まであと...</h2>
-            <button onClick={openEdit} style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--accent-color)' }}>
-              ✎
-            </button>
+          <div className="flex items-center justify-between mb-1 gap-2">
+            <h2 className="title" style={{ fontSize: '1.5rem', marginBottom: 0, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>旅行まであと...</h2>
+            <div className="flex gap-2" style={{ flexShrink: 0 }}>
+              <button 
+                onClick={openEdit} 
+                title="編集する"
+                style={{ 
+                  background: 'var(--glass-bg)', 
+                  border: '1px solid var(--glass-border)', 
+                  borderRadius: '50%', 
+                  width: '40px', 
+                  height: '40px', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  cursor: 'pointer', 
+                  color: 'var(--accent-color)'
+                }}
+              >
+                ✎
+              </button>
+              <button 
+                onClick={handleDeleteTrip} 
+                title="削除する"
+                style={{ 
+                  background: 'var(--glass-bg)', 
+                  border: '1px solid var(--glass-border)', 
+                  borderRadius: '50%', 
+                  width: '40px', 
+                  height: '40px', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  cursor: 'pointer', 
+                  color: 'var(--danger)'
+                }}
+              >
+                <Trash2 size={18} />
+              </button>
+            </div>
           </div>
           <p className="subtitle" style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>{selectedTrip.tripName}</p>
           
@@ -840,12 +878,12 @@ export default function Dashboard() {
                 onChange={e => setEditTripParticipants(e.target.value)}
               />
               
-              <div className="flex gap-2" style={{ marginTop: '1rem' }}>
-                <button type="submit" className="btn-primary" style={{ flex: 1, justifyContent: 'center' }}>
+              <div className="flex" style={{ flexDirection: 'column', gap: '0.75rem', marginTop: '1.5rem' }}>
+                <button type="submit" className="btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
                   更新する
                 </button>
-                <button type="button" onClick={handleDeleteTrip} className="btn-secondary" style={{ color: 'var(--danger)', borderColor: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <X size={16} /> 削除
+                <button type="button" onClick={handleDeleteTrip} className="btn-secondary" style={{ width: '100%', justifyContent: 'center', color: 'var(--danger)', borderColor: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <X size={16} /> 旅行計画を削除
                 </button>
               </div>
             </form>

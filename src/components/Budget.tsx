@@ -103,6 +103,7 @@ export default function Budget() {
   const [editExpensePayment, setEditExpensePayment] = useState<PaymentMethod>('credit_card');
 
   const [expandedIcons, setExpandedIcons] = useState<Record<string, boolean>>({});
+  const [groupBy, setGroupBy] = useState<'category' | 'payment'>('category');
 
   const toggleIcon = (iconKey: string) => {
     setExpandedIcons(prev => ({
@@ -136,6 +137,16 @@ export default function Budget() {
     acc[iconKey].push(expense);
     return acc;
   }, {} as Record<IconType, Expense[]>);
+
+  // paymentMethod ごとにグループ化
+  const groupedByPayment = processedExpenses.reduce((acc, expense) => {
+    const paymentKey = expense.paymentMethod || 'cash';
+    if (!acc[paymentKey]) {
+      acc[paymentKey] = [];
+    }
+    acc[paymentKey].push(expense);
+    return acc;
+  }, {} as Record<PaymentMethod, Expense[]>);
 
   // カテゴリ（アイコン）別集計の算出
   const categorySummary = Object.keys(iconLabels).map((key) => {
@@ -183,9 +194,11 @@ export default function Budget() {
       paymentMethod: newExpensePayment
     });
     
+    // 追加したキーを自動展開
+    const autoExpandKey = groupBy === 'category' ? newExpenseIcon : newExpensePayment;
     setExpandedIcons(prev => ({
       ...prev,
-      [newExpenseIcon]: true
+      [autoExpandKey]: true
     }));
 
     setIsAdding(false);
@@ -221,6 +234,8 @@ export default function Budget() {
     });
     setEditingExpenseId(null);
   };
+
+  const activeGrouped = groupBy === 'category' ? groupedExpenses : groupedByPayment;
 
   return (
     <div>
@@ -434,20 +449,55 @@ export default function Budget() {
       {/* Breakdown */}
       {processedExpenses.length > 0 ? (
         <>
-          <h3 className="title" style={{ fontSize: '1.1rem', marginBottom: '1rem' }}>カテゴリ別内訳</h3>
+          <div className="flex items-center justify-between mb-4 mt-6">
+            <h3 className="title" style={{ fontSize: '1.1rem', marginBottom: 0 }}>内訳のまとめ方</h3>
+            <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200/50" style={{ width: 'fit-content' }}>
+              <button 
+                onClick={() => setGroupBy('category')}
+                className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${groupBy === 'category' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                style={{ border: 'none', cursor: 'pointer' }}
+              >
+                種類別
+              </button>
+              <button 
+                onClick={() => setGroupBy('payment')}
+                className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${groupBy === 'payment' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                style={{ border: 'none', cursor: 'pointer' }}
+              >
+                支払い方法別
+              </button>
+            </div>
+          </div>
+
           <div className="flex" style={{ flexDirection: 'column', gap: '1rem' }}>
-            {Object.entries(groupedExpenses).map(([iconKey, iconExpenses]) => {
-              const isOpen = expandedIcons[iconKey];
-              const IconComponent = getIcon(iconKey as IconType);
-              const label = iconLabels[iconKey as IconType] || 'その他';
-              const color = iconColors[iconKey as IconType] || '#3b82f6';
-              const catTotal = iconExpenses.reduce((acc, curr) => acc + curr.amount, 0);
+            {Object.entries(activeGrouped).map(([key, groupExpenses]) => {
+              const isOpen = expandedIcons[key];
+              
+              let label = '';
+              let iconElement = null;
+              let color = '#3b82f6';
+              
+              if (groupBy === 'category') {
+                const iconKey = key as IconType;
+                const IconComponent = getIcon(iconKey);
+                label = iconLabels[iconKey] || 'その他';
+                color = iconColors[iconKey] || '#3b82f6';
+                iconElement = <IconComponent size={20} />;
+              } else {
+                const paymentKey = key as PaymentMethod;
+                label = paymentMethodLabels[paymentKey] || 'その他';
+                color = paymentMethodColors[paymentKey] || '#3b82f6';
+                const emoji = paymentMethodIcons[paymentKey] || '❓';
+                iconElement = <span style={{ fontSize: '18px' }}>{emoji}</span>;
+              }
+              
+              const catTotal = groupExpenses.reduce((acc, curr) => acc + curr.amount, 0);
 
               return (
-                <div key={iconKey} className="glass-panel" style={{ padding: 0, overflow: 'hidden', borderRadius: '16px' }}>
+                <div key={key} className="glass-panel" style={{ padding: 0, overflow: 'hidden', borderRadius: '16px' }}>
                   {/* アコーディオンヘッダー */}
                   <button
-                    onClick={() => toggleIcon(iconKey)}
+                    onClick={() => toggleIcon(key)}
                     className="w-full flex items-center justify-between p-4 hover:bg-slate-50/50 transition-colors"
                     style={{
                       background: 'none',
@@ -469,11 +519,11 @@ export default function Budget() {
                         alignItems: 'center',
                         justifyContent: 'center'
                       }}>
-                        <IconComponent size={20} />
+                        {iconElement}
                       </div>
                       <div>
                         <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '1rem' }}>{label}</span>
-                        <span className="text-xs text-slate-400 ml-2">({iconExpenses.length}件)</span>
+                        <span className="text-xs text-slate-400 ml-2">({groupExpenses.length}件)</span>
                       </div>
                     </div>
                     
@@ -486,7 +536,7 @@ export default function Budget() {
                   {/* 展開された中身 */}
                   {isOpen && (
                     <div className="p-4 border-t border-slate-100/80 bg-slate-50/30 flex flex-col gap-3">
-                      {iconExpenses.map((exp) => {
+                      {groupExpenses.map((exp) => {
                         const isEditing = editingExpenseId === exp.id;
                         const paymentIcon = paymentMethodIcons[exp.paymentMethod || 'cash'];
                         const paymentLabel = paymentMethodLabels[exp.paymentMethod || 'cash'];

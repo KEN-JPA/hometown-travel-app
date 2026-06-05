@@ -35,6 +35,8 @@ export interface Booking {
   color: string;
   imageKey?: string;
   link?: string;
+  ticketNumber?: string;
+  seatNumber?: string;
 }
 
 export interface ExpenseSplit {

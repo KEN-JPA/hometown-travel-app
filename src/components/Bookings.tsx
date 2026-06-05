@@ -32,6 +32,8 @@ const BookingCard = ({ booking }: { booking: Booking }) => {
   const [editDetails, setEditDetails] = useState(booking.details);
   const [editLink, setEditLink] = useState(booking.link || '');
   const [editIcon, setEditIcon] = useState<IconType>(booking.icon);
+  const [editTicketNumber, setEditTicketNumber] = useState(booking.ticketNumber || '');
+  const [editSeatNumber, setEditSeatNumber] = useState(booking.seatNumber || '');
 
   useEffect(() => {
     if (booking.imageKey) {
@@ -48,6 +50,8 @@ const BookingCard = ({ booking }: { booking: Booking }) => {
     setEditDetails(booking.details);
     setEditLink(booking.link || '');
     setEditIcon(booking.icon);
+    setEditTicketNumber(booking.ticketNumber || '');
+    setEditSeatNumber(booking.seatNumber || '');
   }, [booking]);
 
   const handleCopy = (text: string) => {
@@ -79,7 +83,9 @@ const BookingCard = ({ booking }: { booking: Booking }) => {
       reference: editReference,
       details: editDetails,
       link: editLink || undefined,
-      icon: editIcon
+      icon: editIcon,
+      ticketNumber: editTicketNumber || undefined,
+      seatNumber: editSeatNumber || undefined
     });
     setIsEditing(false);
   };
@@ -120,9 +126,23 @@ const BookingCard = ({ booking }: { booking: Booking }) => {
               </div>
             </div>
             <div>
-              <div className="text-xs font-bold text-slate-700 mb-1">予約番号・コード</div>
+              <div className="text-xs font-bold text-slate-700 mb-1">
+                {editIcon === 'plane' ? '予約番号' : '予約番号・コード'}
+              </div>
               <input type="text" className="input-field" style={{ marginBottom: 0, fontSize: '0.875rem' }} value={editReference} onChange={e => setEditReference(e.target.value)} />
             </div>
+            {editIcon === 'plane' && (
+              <div className="flex gap-2">
+                <div style={{ flex: 1 }}>
+                  <div className="text-xs font-bold text-slate-700 mb-1">航空券番号</div>
+                  <input type="text" placeholder="例: 2051234567890" className="input-field" style={{ marginBottom: 0, fontSize: '0.875rem' }} value={editTicketNumber} onChange={e => setEditTicketNumber(e.target.value)} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div className="text-xs font-bold text-slate-700 mb-1">座席番号</div>
+                  <input type="text" placeholder="例: 15A" className="input-field" style={{ marginBottom: 0, fontSize: '0.875rem' }} value={editSeatNumber} onChange={e => setEditSeatNumber(e.target.value)} />
+                </div>
+              </div>
+            )}
             <div>
               <div className="text-xs font-bold text-slate-700 mb-1">詳細内容・メモ</div>
               <textarea className="input-field" style={{ marginBottom: 0, fontSize: '0.875rem', minHeight: '60px' }} value={editDetails} onChange={e => setEditDetails(e.target.value)} />
@@ -169,16 +189,54 @@ const BookingCard = ({ booking }: { booking: Booking }) => {
               </div>
             )}
             
-            {booking.reference && (
-              <div style={{ background: 'rgba(0,0,0,0.03)', padding: '0.75rem', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                <div className="flex-1">
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>予約番号</div>
-                  <div style={{ fontFamily: 'monospace', fontSize: '1rem', letterSpacing: '1px', wordBreak: 'break-all' }}>{booking.reference}</div>
-                </div>
-                <button onClick={() => handleCopy(booking.reference)} style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', padding: '0.5rem', borderRadius: '6px', color: 'var(--text-primary)', cursor: 'pointer' }}>
-                  <Copy size={16} />
-                </button>
+            {booking.icon === 'plane' && (booking.reference || booking.ticketNumber || booking.seatNumber) ? (
+              <div className="flex flex-col gap-2 mb-4">
+                {booking.reference && (
+                  <div style={{ background: 'rgba(0,0,0,0.03)', padding: '0.6rem 0.75rem', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div className="flex-1">
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>予約番号</div>
+                      <div style={{ fontFamily: 'monospace', fontSize: '0.95rem', fontWeight: 'bold', letterSpacing: '0.5px' }}>{booking.reference}</div>
+                    </div>
+                    <button onClick={() => handleCopy(booking.reference || '')} style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', padding: '0.4rem', borderRadius: '6px', color: 'var(--text-primary)', cursor: 'pointer' }}>
+                      <Copy size={14} />
+                    </button>
+                  </div>
+                )}
+                {booking.ticketNumber && (
+                  <div style={{ background: 'rgba(0,0,0,0.03)', padding: '0.6rem 0.75rem', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div className="flex-1">
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>航空券番号</div>
+                      <div style={{ fontFamily: 'monospace', fontSize: '0.95rem', fontWeight: 'bold', letterSpacing: '0.5px' }}>{booking.ticketNumber}</div>
+                    </div>
+                    <button onClick={() => handleCopy(booking.ticketNumber || '')} style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', padding: '0.4rem', borderRadius: '6px', color: 'var(--text-primary)', cursor: 'pointer' }}>
+                      <Copy size={14} />
+                    </button>
+                  </div>
+                )}
+                {booking.seatNumber && (
+                  <div style={{ background: 'rgba(0,0,0,0.03)', padding: '0.6rem 0.75rem', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div className="flex-1">
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>座席番号</div>
+                      <div style={{ fontFamily: 'monospace', fontSize: '0.95rem', fontWeight: 'bold', letterSpacing: '0.5px' }}>{booking.seatNumber}</div>
+                    </div>
+                    <button onClick={() => handleCopy(booking.seatNumber || '')} style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', padding: '0.4rem', borderRadius: '6px', color: 'var(--text-primary)', cursor: 'pointer' }}>
+                      <Copy size={14} />
+                    </button>
+                  </div>
+                )}
               </div>
+            ) : (
+              booking.reference && (
+                <div style={{ background: 'rgba(0,0,0,0.03)', padding: '0.75rem', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <div className="flex-1">
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>予約番号・コード</div>
+                    <div style={{ fontFamily: 'monospace', fontSize: '1rem', letterSpacing: '1px', wordBreak: 'break-all' }}>{booking.reference}</div>
+                  </div>
+                  <button onClick={() => handleCopy(booking.reference)} style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', padding: '0.5rem', borderRadius: '6px', color: 'var(--text-primary)', cursor: 'pointer' }}>
+                    <Copy size={16} />
+                  </button>
+                </div>
+              )
             )}
 
             {booking.link && (
@@ -287,6 +345,8 @@ export default function Bookings() {
   const [newLink, setNewLink] = useState('');
   const [newDetails, setNewDetails] = useState('');
   const [newIcon, setNewIcon] = useState<IconType>('ticket');
+  const [newTicketNumber, setNewTicketNumber] = useState('');
+  const [newSeatNumber, setNewSeatNumber] = useState('');
 
   const [expandedIcons, setExpandedIcons] = useState<Record<string, boolean>>({});
 
@@ -333,7 +393,9 @@ export default function Bookings() {
       link: newLink,
       details: newDetails || '手動追加',
       icon: newIcon,
-      color: '#3b82f6'
+      color: '#3b82f6',
+      ticketNumber: newIcon === 'plane' ? newTicketNumber : undefined,
+      seatNumber: newIcon === 'plane' ? newSeatNumber : undefined
     });
     setExpandedIcons(prev => ({
       ...prev,
@@ -346,6 +408,8 @@ export default function Bookings() {
     setNewLink('');
     setNewDetails('');
     setNewIcon('ticket');
+    setNewTicketNumber('');
+    setNewSeatNumber('');
   };
 
   return (
@@ -395,9 +459,23 @@ export default function Bookings() {
               </div>
             </div>
             <div>
-              <div className="text-xs font-bold text-slate-700 mb-1">予約番号（あると便利！）</div>
+              <div className="text-xs font-bold text-slate-700 mb-1">
+                {newIcon === 'plane' ? '予約番号' : '予約番号（あると便利！）'}
+              </div>
               <input type="text" placeholder="例: AB123456" className="input-field" style={{ marginBottom: 0 }} value={newRef} onChange={e => setNewRef(e.target.value)} />
             </div>
+            {newIcon === 'plane' && (
+              <div className="flex gap-2">
+                <div style={{ flex: 1 }}>
+                  <div className="text-xs font-bold text-slate-700 mb-1">航空券番号</div>
+                  <input type="text" placeholder="例: 2051234567890" className="input-field" style={{ marginBottom: 0 }} value={newTicketNumber} onChange={e => setNewTicketNumber(e.target.value)} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div className="text-xs font-bold text-slate-700 mb-1">座席番号</div>
+                  <input type="text" placeholder="例: 15A" className="input-field" style={{ marginBottom: 0 }} value={newSeatNumber} onChange={e => setNewSeatNumber(e.target.value)} />
+                </div>
+              </div>
+            )}
             <div>
               <div className="text-xs font-bold text-slate-700 mb-1">詳細内容・メモ（任意）</div>
               <textarea placeholder="例: チェックイン15:00、朝食付き、ファミリールーム" className="input-field" style={{ marginBottom: 0, minHeight: '60px' }} value={newDetails} onChange={e => setNewDetails(e.target.value)} />

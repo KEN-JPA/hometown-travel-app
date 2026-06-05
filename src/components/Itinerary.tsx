@@ -20,7 +20,11 @@ export default function Itinerary() {
   const selectedTripId = useTravelStore((state) => state.selectedTripId);
   const selectedTrip = trips.find(t => t.id === selectedTripId);
   const addCategory = useTravelStore((state) => state.addCategory);
+  const updateCategory = useTravelStore((state) => state.updateCategory);
+  const deleteCategory = useTravelStore((state) => state.deleteCategory);
   const addDaySchedule = useTravelStore((state) => state.addDaySchedule);
+  const updateDaySchedule = useTravelStore((state) => state.updateDaySchedule);
+  const deleteDaySchedule = useTravelStore((state) => state.deleteDaySchedule);
   const addEvent = useTravelStore((state) => state.addEvent);
   const updateEvent = useTravelStore((state) => state.updateEvent);
   const deleteEvent = useTravelStore((state) => state.deleteEvent);
@@ -39,6 +43,38 @@ export default function Itinerary() {
   const [newEventTime, setNewEventTime] = useState('');
   const [newEventLoc, setNewEventLoc] = useState('');
   const [newEventIcon, setNewEventIcon] = useState<IconType>('map-pin');
+
+  // カテゴリ（大枠）編集用の状態
+  const [editingCatId, setEditingCatId] = useState<string | null>(null);
+  const [editCatName, setEditCatName] = useState('');
+
+  // 日程（日付）編集用の状態
+  const [editingDayId, setEditingDayId] = useState<string | null>(null);
+  const [editDayDate, setEditDayDate] = useState('');
+
+  const startEditingCat = (id: string, name: string) => {
+    setEditingCatId(id);
+    setEditCatName(name);
+  };
+
+  const handleUpdateCat = (e: React.FormEvent, id: string) => {
+    e.preventDefault();
+    if (!editCatName.trim()) return;
+    updateCategory(id, editCatName);
+    setEditingCatId(null);
+  };
+
+  const startEditingDay = (id: string, date: string) => {
+    setEditingDayId(id);
+    setEditDayDate(date);
+  };
+
+  const handleUpdateDay = (e: React.FormEvent, catId: string, dayId: string) => {
+    e.preventDefault();
+    if (!editDayDate.trim()) return;
+    updateDaySchedule(catId, dayId, editDayDate);
+    setEditingDayId(null);
+  };
 
   if (!selectedTrip) {
     return <Navigate to="/" replace />;
@@ -183,9 +219,48 @@ export default function Itinerary() {
           categories.map((cat) => (
             <div key={cat.id} className="glass-panel" style={{ padding: '1rem', background: 'rgba(255,255,255,0.4)' }}>
               <div className="flex items-center justify-between mb-3" style={{ borderBottom: '2px solid var(--accent-color)', paddingBottom: '0.5rem' }}>
-                <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                  {cat.name}
-                </h3>
+                {editingCatId === cat.id ? (
+                  <form onSubmit={(e) => handleUpdateCat(e, cat.id)} className="flex items-center gap-2 flex-1 mr-4">
+                    <input 
+                      type="text" 
+                      value={editCatName} 
+                      onChange={e => setEditCatName(e.target.value)} 
+                      style={{ fontSize: '1rem', padding: '0.2rem 0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)', flex: 1 }}
+                      required
+                      autoFocus
+                    />
+                    <button type="submit" className="btn-primary" style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}>保存</button>
+                    <button type="button" className="btn-secondary" style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }} onClick={() => setEditingCatId(null)}>キャンセル</button>
+                  </form>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                      {cat.name}
+                    </h3>
+                    <div className="flex gap-1">
+                      <button 
+                        onClick={() => startEditingCat(cat.id, cat.name)} 
+                        title="計画名を編集"
+                        style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '0.2rem' }}
+                        className="hover:text-indigo-600"
+                      >
+                        ✎
+                      </button>
+                      <button 
+                        onClick={() => {
+                          if (window.confirm(`「${cat.name}」とその中のすべての日程・予定を削除してもよろしいですか？`)) {
+                            deleteCategory(cat.id);
+                          }
+                        }} 
+                        title="計画を削除"
+                        style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '0.2rem' }}
+                        className="hover:text-rose-600"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <button onClick={() => setAddingDayToCat(cat.id)} style={{ background: 'none', border: 'none', color: 'var(--accent-color)', display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}>
                   <Plus size={14} /> 日付を追加
                 </button>
@@ -206,9 +281,48 @@ export default function Itinerary() {
                 {cat.schedules.map((day) => (
                   <div key={day.id}>
                     <div className="flex items-center justify-between mb-3">
-                      <h4 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                        {day.date}
-                      </h4>
+                      {editingDayId === day.id ? (
+                        <form onSubmit={(e) => handleUpdateDay(e, cat.id, day.id)} className="flex items-center gap-2 flex-1 mr-4">
+                          <input 
+                            type="text" 
+                            value={editDayDate} 
+                            onChange={e => setEditDayDate(e.target.value)} 
+                            style={{ fontSize: '0.9rem', padding: '0.2rem 0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)', flex: 1 }}
+                            required
+                            autoFocus
+                          />
+                          <button type="submit" className="btn-primary" style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}>保存</button>
+                          <button type="button" className="btn-secondary" style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }} onClick={() => setEditingDayId(null)}>キャンセル</button>
+                        </form>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <h4 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                            {day.date}
+                          </h4>
+                          <div className="flex gap-1">
+                            <button 
+                              onClick={() => startEditingDay(day.id, day.date)} 
+                              title="日程名を編集"
+                              style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '0.2rem' }}
+                              className="hover:text-indigo-600"
+                            >
+                              ✎
+                            </button>
+                            <button 
+                              onClick={() => {
+                                if (window.confirm(`「${day.date}」とその中のすべての予定を削除してもよろしいですか？`)) {
+                                  deleteDaySchedule(cat.id, day.id);
+                                }
+                              }} 
+                              title="日程を削除"
+                              style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '0.2rem' }}
+                              className="hover:text-rose-600"
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </div>
+                      )}
                       <button onClick={() => setAddingEventTo({catId: cat.id, dayId: day.id})} style={{ background: 'var(--glass-bg)', border: '1px solid var(--accent-glow)', borderRadius: '8px', padding: '0.25rem 0.75rem', color: 'var(--accent-color)', display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}>
                         <Plus size={14} /> 予定追加
                       </button>

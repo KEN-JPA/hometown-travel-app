@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plane, Car, Building2, Ticket, Copy, ExternalLink, MapPin, Home, Upload, X, Plus } from 'lucide-react';
+import { Plane, Car, Building2, Ticket, Copy, ExternalLink, MapPin, Home, Upload, X, Plus, ChevronDown, ChevronUp } from 'lucide-react';
 import { useTravelStore, type IconType, type Booking } from '../store';
 import { set, get } from 'idb-keyval';
 import { Navigate } from 'react-router-dom';
@@ -288,11 +288,40 @@ export default function Bookings() {
   const [newDetails, setNewDetails] = useState('');
   const [newIcon, setNewIcon] = useState<IconType>('ticket');
 
+  const [expandedIcons, setExpandedIcons] = useState<Record<string, boolean>>({});
+
+  const toggleIcon = (iconKey: string) => {
+    setExpandedIcons(prev => ({
+      ...prev,
+      [iconKey]: !prev[iconKey]
+    }));
+  };
+
   if (!selectedTrip) {
     return <Navigate to="/" replace />;
   }
 
   const bookings = selectedTrip.bookings;
+
+  // アイコンの種類名マッピング
+  const iconLabels: Record<IconType, string> = {
+    plane: '飛行機',
+    car: 'レンタカー',
+    home: '一軒家・民宿',
+    building: 'ホテル',
+    ticket: 'チケット',
+    'map-pin': 'スポット'
+  };
+
+  // icon ごとにグループ化
+  const groupedBookings = bookings.reduce((acc, booking) => {
+    const iconKey = booking.icon || 'ticket';
+    if (!acc[iconKey]) {
+      acc[iconKey] = [];
+    }
+    acc[iconKey].push(booking);
+    return acc;
+  }, {} as Record<IconType, Booking[]>);
 
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
@@ -306,6 +335,10 @@ export default function Bookings() {
       icon: newIcon,
       color: '#3b82f6'
     });
+    setExpandedIcons(prev => ({
+      ...prev,
+      [newIcon]: true
+    }));
     setIsAdding(false);
     setNewCat('');
     setNewProvider('');
@@ -383,9 +416,59 @@ export default function Bookings() {
       
       <div className="flex" style={{ flexDirection: 'column', gap: '1rem' }}>
         {bookings.length > 0 ? (
-          bookings.map((booking) => (
-            <BookingCard key={booking.id} booking={booking} />
-          ))
+          Object.entries(groupedBookings).map(([iconKey, iconBookings]) => {
+            const isOpen = expandedIcons[iconKey];
+            const IconComponent = getIcon(iconKey as IconType);
+            const label = iconLabels[iconKey as IconType] || 'その他';
+            const color = iconBookings[0]?.color || '#3b82f6';
+
+            return (
+              <div key={iconKey} className="glass-panel" style={{ padding: 0, overflow: 'hidden', borderRadius: '16px' }}>
+                <button
+                  onClick={() => toggleIcon(iconKey)}
+                  className="w-full flex items-center justify-between p-4 hover:bg-slate-50/50 transition-colors"
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    outline: 'none',
+                    display: 'flex',
+                    width: '100%',
+                  }}
+                >
+                  <div className="flex items-center gap-3">
+                    <div style={{
+                      background: `${color}15`,
+                      color: color,
+                      padding: '0.5rem',
+                      borderRadius: '10px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      <IconComponent size={20} />
+                    </div>
+                    <div>
+                      <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '1rem' }}>{label}</span>
+                      <span className="text-xs text-slate-400 ml-2">({iconBookings.length}件)</span>
+                    </div>
+                  </div>
+                  <div style={{ color: 'var(--text-secondary)' }}>
+                    {isOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                  </div>
+                </button>
+
+                {isOpen && (
+                  <div className="p-4 border-t border-slate-100/80 bg-slate-50/30 flex flex-col gap-3">
+                    {iconBookings.map((booking) => (
+                      <BookingCard key={booking.id} booking={booking} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })
         ) : (
           !isAdding && (
             <div className="glass-panel p-6 text-center text-slate-500">

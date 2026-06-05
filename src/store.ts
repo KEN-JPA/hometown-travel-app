@@ -43,6 +43,7 @@ export interface Expense {
   color: string;
   isPaid?: boolean;
   description?: string;
+  icon?: IconType;
 }
 
 export interface PackingItem {

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { useTravelStore } from '../store';
-import { CheckSquare, Square, Trash2, Plus, Package, Edit2 } from 'lucide-react';
+import { useTravelStore, type PackingItem } from '../store';
+import { CheckSquare, Square, Trash2, Plus, Package, Edit2, ChevronDown, ChevronRight } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
 
 export default function PackingList() {
@@ -20,6 +20,7 @@ export default function PackingList() {
   const [newItemDescription, setNewItemDescription] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [showUnpackedOnly, setShowUnpackedOnly] = useState(false);
+  const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
 
   // 編集用の state
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
@@ -43,6 +44,20 @@ export default function PackingList() {
     return acc;
   }, {} as Record<string, typeof items>);
 
+  const categoryStats = allItems.reduce((acc, item) => {
+    if (!acc[item.category]) acc[item.category] = { total: 0, packed: 0 };
+    acc[item.category].total += 1;
+    if (item.isPacked) acc[item.category].packed += 1;
+    return acc;
+  }, {} as Record<string, { total: number; packed: number }>);
+
+  const toggleCategory = (category: string) => {
+    setCollapsedCategories(prev => ({
+      ...prev,
+      [category]: !prev[category]
+    }));
+  };
+
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newItemName.trim()) return;
@@ -60,7 +75,7 @@ export default function PackingList() {
     setIsAdding(false);
   };
 
-  const startEditing = (item: any) => {
+  const startEditing = (item: PackingItem) => {
     setEditingItemId(item.id);
     setEditItemName(item.name);
     setEditItemCategory(item.category);
@@ -202,12 +217,57 @@ export default function PackingList() {
         </form>
       )}
 
-      {Object.entries(groupedItems).map(([category, categoryItems]) => (
-        <div key={category} className="mb-6">
-          <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--accent-color)', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Package size={16} /> {category}
-          </h3>
-          <div className="flex" style={{ flexDirection: 'column', gap: '0.5rem' }}>
+      {Object.entries(groupedItems).map(([category, categoryItems]) => {
+        const isCollapsed = collapsedCategories[category] === true;
+        const stats = categoryStats[category] || { total: categoryItems.length, packed: categoryItems.filter(item => item.isPacked).length };
+        const categoryProgress = stats.total > 0 ? Math.round((stats.packed / stats.total) * 100) : 0;
+
+        return (
+        <div key={category} className="glass-panel mb-4" style={{ padding: 0, overflow: 'hidden' }}>
+          <button
+            type="button"
+            onClick={() => toggleCategory(category)}
+            className="w-full flex items-center justify-between"
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '0.9rem 1rem',
+              color: 'var(--text-primary)',
+              textAlign: 'left'
+            }}
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div style={{ color: 'var(--accent-color)', display: 'flex', alignItems: 'center' }}>
+                {isCollapsed ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
+              </div>
+              <div style={{
+                background: 'rgba(99, 102, 241, 0.12)',
+                color: 'var(--accent-color)',
+                padding: '0.45rem',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Package size={17} />
+              </div>
+              <div className="min-w-0">
+                <div style={{ fontSize: '1rem', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {category}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>
+                  {stats.packed}/{stats.total} 完了 ・ {categoryProgress}%
+                </div>
+              </div>
+            </div>
+            <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-full shrink-0">
+              {categoryItems.length}件
+            </span>
+          </button>
+
+          {!isCollapsed && (
+          <div className="flex" style={{ flexDirection: 'column', gap: '0.5rem', padding: '0 1rem 1rem' }}>
             {categoryItems.map(item => {
               const isEditing = editingItemId === item.id;
               return (
@@ -339,8 +399,10 @@ export default function PackingList() {
               );
             })}
           </div>
+          )}
         </div>
-      ))}
+        );
+      })}
       
       {allItems.length === 0 && !isAdding && (
         <div className="glass-panel p-6 text-center text-slate-500 mt-6">

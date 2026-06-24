@@ -1,5 +1,15 @@
 # React + TypeScript + Vite
 
+## TRIP BASE backup policy
+
+- Live travel data is stored in Upstash Redis under `family_travel_state`.
+- Every `/api/save-trips` write archives the previous live state into `family_travel_state_backups` before overwriting it.
+- The latest archived server snapshots can be checked with `/api/get-trip-backups`.
+- Add `?includeData=true` to `/api/get-trip-backups` only when a full restore payload is needed.
+- Google Drive sync still keeps `TRIP_BASE_BACKUP.json` as the latest full backup, including IndexedDB images when available.
+- Before Google Drive backup overwrite or restore, the app creates timestamped archive files named `TRIP_BASE_BACKUP_ARCHIVE_<timestamp>_<label>.json`.
+- Booking and preparation images use timestamped IndexedDB keys so new uploads do not overwrite older local image blobs.
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:

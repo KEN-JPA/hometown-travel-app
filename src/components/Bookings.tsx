@@ -68,7 +68,7 @@ const BookingCard = ({ booking }: { booking: Booking }) => {
     const reader = new FileReader();
     reader.onloadend = async () => {
       const base64String = reader.result as string;
-      const key = `booking-img-${booking.id}`;
+      const key = `booking-img-${booking.id}-${Date.now()}`;
       await set(key, base64String);
       updateBookingImage(booking.id, key);
       setImageUrl(base64String);

@@ -8,6 +8,100 @@ import type { DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
+const DRIVE_BACKUP_FILE_NAME = 'TRIP_BASE_BACKUP.json';
+
+const createDriveArchiveName = (label: string) => {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  return `TRIP_BASE_BACKUP_ARCHIVE_${timestamp}_${label}.json`;
+};
+
+const createDriveJsonFile = async (token: string, name: string, body: string) => {
+  const createMetaRes = await fetch(
+    'https://www.googleapis.com/drive/v3/files',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        name,
+        mimeType: 'application/json'
+      })
+    }
+  );
+  if (!createMetaRes.ok) throw new Error('Failed to create Google Drive backup metadata');
+  const fileMeta = await createMetaRes.json();
+  const fileId = fileMeta.id;
+
+  const uploadRes = await fetch(
+    `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,
+    {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body
+    }
+  );
+  if (!uploadRes.ok) throw new Error('Failed to upload Google Drive backup archive');
+
+  return fileId;
+};
+
+const archiveDrivePayload = async (token: string, body: string, label: string) => {
+  return createDriveJsonFile(token, createDriveArchiveName(label), body);
+};
+
+const archiveExistingDriveBackup = async (token: string, fileId: string) => {
+  const downloadRes = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+    {
+      headers: { Authorization: `Bearer ${token}` }
+    }
+  );
+  if (!downloadRes.ok) throw new Error('Failed to download existing Google Drive backup for archive');
+  const existingBackup = await downloadRes.text();
+  await archiveDrivePayload(token, existingBackup, 'before-overwrite');
+};
+
+const renderWishlistText = (name: string) => {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const lines = name.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+
+  return lines.map((line, lineIndex) => {
+    const parts = line.split(urlRegex);
+    return (
+      <div
+        key={`${line}-${lineIndex}`}
+        style={{
+          fontWeight: lineIndex === 0 ? 700 : 500,
+          marginTop: lineIndex === 0 ? 0 : '0.35rem',
+          lineHeight: 1.45,
+        }}
+      >
+        {parts.map((part, partIndex) => (
+          part.match(urlRegex) ? (
+            <a
+              key={`${part}-${partIndex}`}
+              href={part}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: 'var(--accent-color)', textDecoration: 'underline', wordBreak: 'break-all' }}
+              onClick={event => event.stopPropagation()}
+            >
+              {part}
+            </a>
+          ) : (
+            <span key={`${part}-${partIndex}`}>{part}</span>
+          )
+        ))}
+      </div>
+    );
+  });
+};
+
 function SortableTripItem({ trip, onSelect }: { trip: any, onSelect: (id: string) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: trip.id });
   const style = {
@@ -137,7 +231,7 @@ export default function Dashboard() {
   const performDriveSync = async (token: string) => {
     try {
       const searchRes = await fetch(
-        `https://www.googleapis.com/drive/v3/files?q=name='TRIP_BASE_BACKUP.json' and trashed=false&fields=files(id,name,modifiedTime)`,
+        `https://www.googleapis.com/drive/v3/files?q=name='${DRIVE_BACKUP_FILE_NAME}' and trashed=false&fields=files(id,name,modifiedTime)`,
         {
           headers: { Authorization: `Bearer ${token}` }
         }
@@ -191,6 +285,7 @@ export default function Dashboard() {
         );
 
         if (confirmRestore) {
+          await archiveDrivePayload(token, backupData, 'before-restore');
           const downloadRes = await fetch(
             `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
             {
@@ -219,6 +314,7 @@ export default function Dashboard() {
             alert('無効なデータ形式です。復元できませんでした。');
           }
         } else {
+          await archiveExistingDriveBackup(token, fileId);
           const updateRes = await fetch(
             `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,
             {
@@ -246,7 +342,7 @@ export default function Dashboard() {
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-              name: 'TRIP_BASE_BACKUP.json',
+              name: DRIVE_BACKUP_FILE_NAME,
               mimeType: 'application/json'
             })
           }
@@ -315,7 +411,7 @@ export default function Dashboard() {
         
         // ドライブ上の既存のバックアップファイルを検索
         const searchRes = await fetch(
-          `https://www.googleapis.com/drive/v3/files?q=name='TRIP_BASE_BACKUP.json' and trashed=false&fields=files(id,name)`,
+          `https://www.googleapis.com/drive/v3/files?q=name='${DRIVE_BACKUP_FILE_NAME}' and trashed=false&fields=files(id,name)`,
           {
             headers: { Authorization: `Bearer ${driveToken}` }
           }
@@ -362,6 +458,7 @@ export default function Dashboard() {
 
             // ドライブのファイルを上書き更新（完全抹消版）
             const backupData = JSON.stringify({ trips: currentTrips, deletedTrips, images }, null, 2);
+            await archiveExistingDriveBackup(driveToken, fileId);
             await fetch(
               `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,
               {
@@ -975,22 +1072,10 @@ export default function Dashboard() {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          {(selectedTrip.wishlist || []).map((item) => {
-            const urlRegex = /(https?:\/\/[^\s]+)/g;
-            const parts = item.name.split(urlRegex);
-            
-            return (
+          {(selectedTrip.wishlist || []).map((item) => (
               <div key={item.id} className="flex items-center justify-between" style={{ background: 'var(--glass-bg)', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
-                <div style={{ fontWeight: 500, wordBreak: 'break-word', flex: 1, marginRight: '1rem', lineHeight: '1.4' }}>
-                  {parts.map((part, i) => 
-                    part.match(urlRegex) ? (
-                      <a key={i} href={part} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-color)', textDecoration: 'underline', wordBreak: 'break-all' }} onClick={e => e.stopPropagation()}>
-                        {part}
-                      </a>
-                    ) : (
-                      <span key={i}>{part}</span>
-                    )
-                  )}
+                <div style={{ wordBreak: 'break-word', flex: 1, marginRight: '1rem' }}>
+                  {renderWishlistText(item.name)}
                 </div>
                 <button 
                   onClick={() => {
@@ -1003,8 +1088,7 @@ export default function Dashboard() {
                   <X size={18} />
                 </button>
               </div>
-            );
-          })}
+          ))}
 
           {/* Add Item Form */}
           <form 

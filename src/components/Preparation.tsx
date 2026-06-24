@@ -58,7 +58,7 @@ function TaskItem({
     const reader = new FileReader();
     reader.onloadend = async () => {
       const base64String = reader.result as string;
-      const key = `prep-task-img-${task.id}`;
+      const key = `prep-task-img-${task.id}-${Date.now()}`;
       await set(key, base64String);
       updatePreparationTask(task.id, { imageKey: key });
       setImageUrl(base64String);

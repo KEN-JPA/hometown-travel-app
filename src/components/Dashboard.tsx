@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, ChevronRight, X, GripVertical, Download, Upload, Settings, Trash2 } from 'lucide-react';
+import { Plus, ChevronRight, X, GripVertical, Download, Upload, Settings, Trash2, Pencil, Check } from 'lucide-react';
 import { useTravelStore } from '../store';
 import { get, set, del } from 'idb-keyval';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
@@ -155,6 +155,7 @@ export default function Dashboard() {
   const permanentlyDeleteTrip = useTravelStore((state) => state.permanentlyDeleteTrip);
   const reorderTrips = useTravelStore((state) => state.reorderTrips);
   const addWishlistItem = useTravelStore((state) => state.addWishlistItem);
+  const updateWishlistItem = useTravelStore((state) => state.updateWishlistItem);
   const deleteWishlistItem = useTravelStore((state) => state.deleteWishlistItem);
 
   const sensors = useSensors(
@@ -186,6 +187,25 @@ export default function Dashboard() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [driveToken, setDriveToken] = useState<string | null>(null);
   const [settingsTab, setSettingsTab] = useState<'local' | 'google'>('local');
+  const [editingWishlistId, setEditingWishlistId] = useState<string | null>(null);
+  const [editingWishlistName, setEditingWishlistName] = useState('');
+
+  const startWishlistEdit = (item: { id: string; name: string }) => {
+    setEditingWishlistId(item.id);
+    setEditingWishlistName(item.name);
+  };
+
+  const saveWishlistEdit = () => {
+    if (!editingWishlistId || !editingWishlistName.trim()) return;
+    updateWishlistItem(editingWishlistId, editingWishlistName.trim());
+    setEditingWishlistId(null);
+    setEditingWishlistName('');
+  };
+
+  const cancelWishlistEdit = () => {
+    setEditingWishlistId(null);
+    setEditingWishlistName('');
+  };
 
   const handleGoogleDriveSync = () => {
     const cleanClientId = googleClientId.trim();
@@ -1072,23 +1092,77 @@ export default function Dashboard() {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          {(selectedTrip.wishlist || []).map((item) => (
-              <div key={item.id} className="flex items-center justify-between" style={{ background: 'var(--glass-bg)', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
-                <div style={{ wordBreak: 'break-word', flex: 1, marginRight: '1rem' }}>
-                  {renderWishlistText(item.name)}
+          {(selectedTrip.wishlist || []).map((item) => {
+            const isEditing = editingWishlistId === item.id;
+
+            return (
+              <div key={item.id} className="flex items-center justify-between" style={{ background: 'var(--glass-bg)', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid var(--glass-border)', gap: '0.5rem' }}>
+                {isEditing ? (
+                  <textarea
+                    className="input-field"
+                    value={editingWishlistName}
+                    onChange={event => setEditingWishlistName(event.target.value)}
+                    rows={3}
+                    style={{ flex: 1, marginBottom: 0, resize: 'vertical', minHeight: '78px' }}
+                    autoFocus
+                  />
+                ) : (
+                  <div style={{ wordBreak: 'break-word', flex: 1, marginRight: '0.5rem' }}>
+                    {renderWishlistText(item.name)}
+                  </div>
+                )}
+                <div className="flex" style={{ gap: '0.25rem', alignItems: 'center' }}>
+                  {isEditing ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={saveWishlistEdit}
+                        title="保存"
+                        aria-label="保存"
+                        style={{ background: 'var(--accent-color)', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.45rem', borderRadius: '8px' }}
+                      >
+                        <Check size={17} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={cancelWishlistEdit}
+                        title="キャンセル"
+                        aria-label="キャンセル"
+                        style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.45rem' }}
+                      >
+                        <X size={18} />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => startWishlistEdit(item)}
+                        title="編集"
+                        aria-label="編集"
+                        style={{ background: 'none', border: 'none', color: 'var(--accent-color)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '0.25rem' }}
+                      >
+                        <Pencil size={17} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm('このメモを削除しますか？')) {
+                            deleteWishlistItem(item.id);
+                          }
+                        }}
+                        title="削除"
+                        aria-label="削除"
+                        style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '0.25rem' }}
+                      >
+                        <X size={18} />
+                      </button>
+                    </>
+                  )}
                 </div>
-                <button 
-                  onClick={() => {
-                    if (window.confirm('本当に削除しますか？')) {
-                      deleteWishlistItem(item.id);
-                    }
-                  }}
-                  style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '0.25rem' }}
-                >
-                  <X size={18} />
-                </button>
               </div>
-          ))}
+            );
+          })}
 
           {/* Add Item Form */}
           <form 

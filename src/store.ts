@@ -165,6 +165,7 @@ interface TravelStore {
   deletePreparationTask: (taskId: string) => void;
   generateAutoTasks: () => void;
   addWishlistItem: (name: string) => void;
+  updateWishlistItem: (itemId: string, name: string) => void;
   deleteWishlistItem: (itemId: string) => void;
 }
 
@@ -786,6 +787,17 @@ export const useTravelStore = create<TravelStore>()(
           trips: state.trips.map(trip => 
             trip.id === state.selectedTripId 
               ? { ...trip, wishlist: [...(trip.wishlist || []), { id: generateId(), name }] }
+              : trip
+          )
+        };
+      }),
+
+      updateWishlistItem: (itemId, name) => set((state) => {
+        if (!state.selectedTripId) return state;
+        return {
+          trips: state.trips.map(trip =>
+            trip.id === state.selectedTripId
+              ? { ...trip, wishlist: (trip.wishlist || []).map(item => item.id === itemId ? { ...item, name } : item) }
               : trip
           )
         };

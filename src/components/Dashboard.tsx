@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, ChevronRight, X, GripVertical, Download, Upload, Settings, Trash2, Pencil, Check } from 'lucide-react';
+import { Plus, ChevronRight, X, GripVertical, Download, Upload, Settings, Trash2, Pencil, Check, Save, RefreshCw, History } from 'lucide-react';
 import { useTravelStore } from '../store';
 import { get, set, del } from 'idb-keyval';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
@@ -9,6 +9,15 @@ import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrate
 import { CSS } from '@dnd-kit/utilities';
 
 const DRIVE_BACKUP_FILE_NAME = 'TRIP_BASE_BACKUP.json';
+
+type TripBackupSummary = {
+  id: string;
+  createdAt: string;
+  source?: string;
+  tripCount: number;
+  deletedTripCount: number;
+  tripNames: string[];
+};
 
 const createDriveArchiveName = (label: string) => {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -102,6 +111,22 @@ const renderWishlistText = (name: string) => {
   });
 };
 
+const formatBackupDate = (value?: string) => {
+  if (!value) return '日時不明';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(date);
+};
+
 function SortableTripItem({ trip, onSelect }: { trip: any, onSelect: (id: string) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: trip.id });
   const style = {
@@ -186,7 +211,13 @@ export default function Dashboard() {
   const [googleClientId, setGoogleClientId] = useState(localStorage.getItem('google_drive_client_id') || '');
   const [isSyncing, setIsSyncing] = useState(false);
   const [driveToken, setDriveToken] = useState<string | null>(null);
-  const [settingsTab, setSettingsTab] = useState<'local' | 'google'>('local');
+  const [settingsTab, setSettingsTab] = useState<'local' | 'server' | 'google'>('local');
+  const [serverBackups, setServerBackups] = useState<TripBackupSummary[]>([]);
+  const [isLoadingBackups, setIsLoadingBackups] = useState(false);
+  const [isCreatingBackup, setIsCreatingBackup] = useState(false);
+  const [deletingBackupId, setDeletingBackupId] = useState<string | null>(null);
+  const [backupStatus, setBackupStatus] = useState('');
+  const [backupError, setBackupError] = useState('');
   const [editingWishlistId, setEditingWishlistId] = useState<string | null>(null);
   const [editingWishlistName, setEditingWishlistName] = useState('');
 
@@ -205,6 +236,80 @@ export default function Dashboard() {
   const cancelWishlistEdit = () => {
     setEditingWishlistId(null);
     setEditingWishlistName('');
+  };
+
+  const loadServerBackups = async () => {
+    setIsLoadingBackups(true);
+    setBackupError('');
+    try {
+      const response = await fetch('/api/get-trip-backups?limit=50');
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.message || data?.error || 'バックアップ履歴を取得できませんでした');
+      }
+      setServerBackups(Array.isArray(data.backups) ? data.backups : []);
+    } catch (err: any) {
+      setBackupError(err.message || 'バックアップ履歴を取得できませんでした');
+    } finally {
+      setIsLoadingBackups(false);
+    }
+  };
+
+  useEffect(() => {
+    if (showSettings && settingsTab === 'server') {
+      void loadServerBackups();
+    }
+  }, [showSettings, settingsTab]);
+
+  const handleCreateServerBackup = async () => {
+    setIsCreatingBackup(true);
+    setBackupStatus('');
+    setBackupError('');
+    try {
+      const response = await fetch('/api/create-trip-backup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source: 'manual-dashboard' }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.message || data?.error || 'バックアップを作成できませんでした');
+      }
+      setBackupStatus(`${formatBackupDate(data.backup?.createdAt)} のバックアップを作成しました`);
+      await loadServerBackups();
+    } catch (err: any) {
+      setBackupError(err.message || 'バックアップを作成できませんでした');
+    } finally {
+      setIsCreatingBackup(false);
+    }
+  };
+
+  const handleDeleteServerBackup = async (backup: TripBackupSummary) => {
+    const label = formatBackupDate(backup.createdAt);
+    if (!window.confirm(`${label} のバックアップを削除しますか？\n現在入力されている旅行データは削除されません。`)) {
+      return;
+    }
+
+    setDeletingBackupId(backup.id);
+    setBackupStatus('');
+    setBackupError('');
+    try {
+      const response = await fetch('/api/delete-trip-backup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: backup.id }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.message || data?.error || 'バックアップを削除できませんでした');
+      }
+      setBackupStatus(`${label} のバックアップを削除しました`);
+      await loadServerBackups();
+    } catch (err: any) {
+      setBackupError(err.message || 'バックアップを削除できませんでした');
+    } finally {
+      setDeletingBackupId(null);
+    }
   };
 
   const handleGoogleDriveSync = () => {
@@ -700,6 +805,20 @@ export default function Dashboard() {
                 >
                   💾 ローカル保存
                 </button>
+                <button
+                  onClick={() => setSettingsTab('server')}
+                  className="flex-1 py-1.5 text-xs font-bold rounded-lg transition-all"
+                  style={{
+                    background: settingsTab === 'server' ? 'white' : 'transparent',
+                    backgroundColor: settingsTab === 'server' ? 'white' : 'transparent',
+                    color: settingsTab === 'server' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    boxShadow: settingsTab === 'server' ? '0 2px 6px rgba(0,0,0,0.05)' : 'none',
+                    border: 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  履歴バックアップ
+                </button>
                 <button 
                   onClick={() => setSettingsTab('google')}
                   className="flex-1 py-1.5 text-xs font-bold rounded-lg transition-all"
@@ -738,6 +857,97 @@ export default function Dashboard() {
                       </label>
                     </div>
                   </>
+                ) : settingsTab === 'server' ? (
+                  <div className="glass-panel p-4" style={{ background: 'rgba(16, 185, 129, 0.04)', borderColor: 'rgba(16, 185, 129, 0.18)', borderRadius: '16px' }}>
+                    <h4 className="font-bold text-slate-700 mb-2 flex items-center gap-2" style={{ fontSize: '0.85rem' }}>
+                      <History size={14} /> バックアップ履歴
+                    </h4>
+                    <p className="text-slate-500 mb-3" style={{ fontSize: '0.7rem', lineHeight: 1.5 }}>
+                      現在サーバーに保存されている旅行データを、日時付きの履歴として保存します。履歴を削除しても、今入力されている旅行データは消えません。
+                    </p>
+
+                    <div className="flex gap-2 mb-3">
+                      <button
+                        type="button"
+                        onClick={handleCreateServerBackup}
+                        disabled={isCreatingBackup || isLoadingBackups}
+                        className="btn-primary flex-1 justify-center flex items-center gap-2 py-2 text-xs"
+                        style={{
+                          background: (isCreatingBackup || isLoadingBackups) ? '#e2e8f0' : 'var(--accent-color)',
+                          color: (isCreatingBackup || isLoadingBackups) ? '#94a3b8' : 'white',
+                          cursor: (isCreatingBackup || isLoadingBackups) ? 'not-allowed' : 'pointer',
+                        }}
+                      >
+                        <Save size={14} />
+                        {isCreatingBackup ? 'バックアップ中...' : '今の状態をバックアップ'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={loadServerBackups}
+                        disabled={isLoadingBackups || isCreatingBackup}
+                        className="btn-secondary flex items-center justify-center"
+                        style={{ padding: '0.55rem 0.75rem' }}
+                        title="履歴を更新"
+                        aria-label="履歴を更新"
+                      >
+                        <RefreshCw size={14} />
+                      </button>
+                    </div>
+
+                    {backupStatus && (
+                      <div className="mb-3 p-2.5 rounded-lg text-xs" style={{ background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.18)', color: '#047857', lineHeight: 1.4 }}>
+                        {backupStatus}
+                      </div>
+                    )}
+
+                    {backupError && (
+                      <div className="mb-3 p-2.5 rounded-lg text-xs" style={{ background: 'rgba(239, 68, 68, 0.06)', border: '1px solid rgba(239, 68, 68, 0.16)', color: '#dc2626', lineHeight: 1.4 }}>
+                        {backupError}
+                      </div>
+                    )}
+
+                    <div className="flex" style={{ flexDirection: 'column', gap: '0.65rem', maxHeight: '320px', overflowY: 'auto' }}>
+                      {isLoadingBackups ? (
+                        <div className="text-xs text-slate-500 p-3 text-center">履歴を読み込み中...</div>
+                      ) : serverBackups.length === 0 ? (
+                        <div className="text-xs text-slate-500 p-3 text-center">まだバックアップ履歴はありません。</div>
+                      ) : (
+                        serverBackups.map((backup) => (
+                          <div key={backup.id} className="flex items-center justify-between gap-3 p-3 rounded-xl border border-slate-200 bg-white/70">
+                            <div style={{ minWidth: 0 }}>
+                              <div className="font-bold text-slate-800" style={{ fontSize: '0.82rem' }}>
+                                {formatBackupDate(backup.createdAt)}
+                              </div>
+                              <div className="text-xs text-slate-500 mt-1" style={{ lineHeight: 1.35 }}>
+                                旅行 {backup.tripCount}件 / ゴミ箱 {backup.deletedTripCount}件
+                              </div>
+                              {backup.tripNames.length > 0 && (
+                                <div className="text-xs text-slate-500 mt-1" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '220px' }}>
+                                  {backup.tripNames.join('、')}
+                                </div>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteServerBackup(backup)}
+                              disabled={deletingBackupId === backup.id}
+                              className="btn-secondary flex items-center justify-center"
+                              style={{
+                                padding: '0.45rem',
+                                color: 'var(--danger)',
+                                borderColor: 'rgba(239, 68, 68, 0.35)',
+                                flexShrink: 0,
+                              }}
+                              title="このバックアップを削除"
+                              aria-label="このバックアップを削除"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
                 ) : (
                   /* Google ドライブ同期セクション */
                   <div className="glass-panel p-4" style={{ background: 'rgba(59, 130, 246, 0.03)', borderColor: 'rgba(59, 130, 246, 0.15)', borderRadius: '16px' }}>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plane, Car, Home, Building2, Ticket, MapPin, Plus, FolderPlus, Map, GripVertical, ArrowDownUp } from 'lucide-react';
+import { Plane, Car, Home, Building2, Ticket, MapPin, Plus, FolderPlus, Map, GripVertical, ArrowDownUp, ChevronDown, ChevronRight } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -191,7 +191,7 @@ export default function Itinerary() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
   
-  const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
+  const [expandedEventIds, setExpandedEventIds] = useState<Record<string, boolean>>({});
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   
   const [isAddingCat, setIsAddingCat] = useState(false);
@@ -245,7 +245,10 @@ export default function Itinerary() {
   const categories = selectedTrip.itineraryCategories;
 
   const toggleEvent = (id: string) => {
-    setExpandedEventId(prev => prev === id ? null : id);
+    setExpandedEventIds(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
   };
 
   const handleAddCat = (e: React.FormEvent) => {
@@ -586,7 +589,7 @@ export default function Itinerary() {
                       {day.events.length > 0 ? (
                         <SortableContext items={day.events.map(event => eventDragId(event.id))} strategy={verticalListSortingStrategy}>
                             {day.events.map((event, idx) => {
-                              const isExpanded = expandedEventId === event.id;
+                              const isExpanded = expandedEventIds[event.id] === true;
 
                               return (
                                 <SortableEventRow key={event.id} event={event} index={idx} total={day.events.length}>
@@ -594,6 +597,16 @@ export default function Itinerary() {
                               className="glass-card w-full" 
                               style={{ padding: '1rem', cursor: 'pointer' }}
                               onClick={() => toggleEvent(event.id)}
+                              onKeyDown={(keyboardEvent) => {
+                                if (keyboardEvent.target !== keyboardEvent.currentTarget) return;
+                                if (keyboardEvent.key === 'Enter' || keyboardEvent.key === ' ') {
+                                  keyboardEvent.preventDefault();
+                                  toggleEvent(event.id);
+                                }
+                              }}
+                              role="button"
+                              tabIndex={0}
+                              aria-expanded={isExpanded}
                             >
                               {editingEventId === event.id ? (
                                 <form onClick={e => e.stopPropagation()} onSubmit={(e) => handleUpdateEvent(e, cat.id, day.id, event.id)}>
@@ -625,19 +638,40 @@ export default function Itinerary() {
                                 </form>
                               ) : (
                                 <>
-                                  <div className="flex justify-between items-start">
-                                    <div>
+                                  <div className="flex justify-between items-start" style={{ gap: '0.75rem' }}>
+                                    <div style={{ minWidth: 0, flex: 1 }}>
                                       <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '0.25rem' }}>
                                         {event.time}
                                       </div>
-                                      <div style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.25rem' }}>
+                                      <div style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.25rem', wordBreak: 'break-word' }}>
                                         {event.title}
                                       </div>
                                       <div className="flex items-center gap-1" style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
                                         <MapPin size={14} />
-                                        <span>{event.location}</span>
+                                        <span style={{ wordBreak: 'break-word' }}>{event.location}</span>
                                       </div>
                                     </div>
+                                    <button
+                                      type="button"
+                                      title={isExpanded ? '予定を折り畳む' : '予定を展開する'}
+                                      aria-label={isExpanded ? '予定を折り畳む' : '予定を展開する'}
+                                      onClick={(e) => { e.stopPropagation(); toggleEvent(event.id); }}
+                                      style={{
+                                        width: 30,
+                                        height: 30,
+                                        borderRadius: '50%',
+                                        border: '1px solid var(--glass-border)',
+                                        background: 'var(--glass-bg)',
+                                        color: 'var(--accent-color)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        cursor: 'pointer',
+                                        flexShrink: 0
+                                      }}
+                                    >
+                                      {isExpanded ? <ChevronDown size={17} /> : <ChevronRight size={17} />}
+                                    </button>
                                   </div>
 
                                   {/* Expanded Details */}

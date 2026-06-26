@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, NavLink, Navigate } from 'react-router-dom';
-import { Home, Ticket, Wallet, Calendar, Package, Lock, Gift, Image as ImageIcon, CalendarClock, Search } from 'lucide-react';
+import { Home, Ticket, Wallet, Calendar, Package, Lock, Gift, Image as ImageIcon, CalendarClock, Search, History } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import Itinerary from './components/Itinerary';
 import Bookings from './components/Bookings';
@@ -9,6 +9,7 @@ import PackingList from './components/PackingList';
 import Shopping from './components/Shopping';
 import Memories from './components/Memories';
 import Preparation from './components/Preparation';
+import Backups from './components/Backups';
 import AIChatbot from './components/AIChatbot';
 import SearchModal from './components/SearchModal';
 import { useTravelStore } from './store';
@@ -18,21 +19,14 @@ import './index.css';
 const VALID_PASSWORDS = ['0702', '7842', '1107', '0615'];
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return true;
+    }
+    return localStorage.getItem('trip_base_auth') === 'true';
+  });
   const [password, setPassword] = useState('');
   const [error, setError] = useState(false);
-
-  useEffect(() => {
-    // Bypass on localhost
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      setIsAuthenticated(true);
-      return;
-    }
-    const auth = localStorage.getItem('trip_base_auth');
-    if (auth === 'true') {
-      setIsAuthenticated(true);
-    }
-  }, []);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -153,6 +147,10 @@ function Layout({ children }: { children: React.ReactNode }) {
             <Wallet size={22} />
             <span style={{ fontSize: '0.65rem' }}>費用</span>
           </NavLink>
+          <NavLink to="/backups" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} style={{ minWidth: '58px' }}>
+            <History size={22} />
+            <span style={{ fontSize: '0.65rem' }}>保存</span>
+          </NavLink>
         </nav>
       )}
     </>
@@ -242,6 +240,7 @@ function App() {
             <Route path="/shopping" element={<Shopping />} />
             <Route path="/memories" element={<Memories />} />
             <Route path="/budget" element={<Budget />} />
+            <Route path="/backups" element={<Backups />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Layout>

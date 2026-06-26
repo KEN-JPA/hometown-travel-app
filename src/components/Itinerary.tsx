@@ -1,19 +1,137 @@
 import React, { useState } from 'react';
-import { Plane, Car, Home, Building2, Ticket, MapPin, Plus, FolderPlus, Map } from 'lucide-react';
-import { useTravelStore, type IconType } from '../store';
+import { Plane, Car, Home, Building2, Ticket, MapPin, Plus, FolderPlus, Map, GripVertical, ArrowDownUp } from 'lucide-react';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import type { DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { useTravelStore, type IconType, type DaySchedule, type Event as TripEvent, type TripCategory } from '../store';
 import { Navigate } from 'react-router-dom';
 
-const getIcon = (type: IconType) => {
+const renderIcon = (type: IconType, size = 18) => {
   switch (type) {
-    case 'plane': return Plane;
-    case 'car': return Car;
-    case 'home': return Home;
-    case 'building': return Building2;
-    case 'ticket': return Ticket;
-    case 'map-pin': return MapPin;
-    default: return MapPin;
+    case 'plane': return <Plane size={size} />;
+    case 'car': return <Car size={size} />;
+    case 'home': return <Home size={size} />;
+    case 'building': return <Building2 size={size} />;
+    case 'ticket': return <Ticket size={size} />;
+    case 'map-pin': return <MapPin size={size} />;
+    default: return <MapPin size={size} />;
   }
 };
+
+function SortableDaySection({ dayId, children }: { dayId: string; children: (handle: React.ReactNode) => React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: dayId });
+
+  const handle = (
+    <button
+      type="button"
+      {...attributes}
+      {...listeners}
+      title="日付ブロックを並び替え"
+      aria-label="日付ブロックを並び替え"
+      style={{
+        width: 28,
+        height: 28,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        border: 'none',
+        background: 'transparent',
+        color: 'var(--text-secondary)',
+        cursor: isDragging ? 'grabbing' : 'grab',
+        touchAction: 'none',
+        flexShrink: 0,
+      }}
+    >
+      <GripVertical size={16} />
+    </button>
+  );
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.65 : 1,
+        position: 'relative',
+        zIndex: isDragging ? 2 : 0,
+      }}
+    >
+      {children(handle)}
+    </div>
+  );
+}
+
+function SortableEventRow({
+  event,
+  index,
+  total,
+  children,
+}: {
+  event: TripEvent;
+  index: number;
+  total: number;
+  children: React.ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: event.id });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className="flex gap-3"
+      style={{
+        position: 'relative',
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.65 : 1,
+        zIndex: isDragging ? 2 : 0,
+      }}
+    >
+      {/* Timeline line */}
+      {index !== total - 1 && (
+        <div style={{ position: 'absolute', left: '47px', top: '40px', bottom: '-1.5rem', width: '2px', background: 'var(--glass-border)' }}></div>
+      )}
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0, zIndex: 1 }}>
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          title="予定を並び替え"
+          aria-label="予定を並び替え"
+          style={{
+            width: 24,
+            height: 40,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: 'none',
+            background: 'transparent',
+            color: 'var(--text-secondary)',
+            cursor: isDragging ? 'grabbing' : 'grab',
+            touchAction: 'none',
+          }}
+          onClick={event => event.stopPropagation()}
+        >
+          <GripVertical size={15} />
+        </button>
+
+        {/* Icon */}
+        <div style={{
+          width: '40px', height: '40px', borderRadius: '50%',
+          background: 'var(--glass-bg)', border: '1px solid var(--glass-border)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: 'var(--text-primary)', flexShrink: 0,
+        }}>
+          {renderIcon(event.icon, 18)}
+        </div>
+      </div>
+
+      {children}
+    </div>
+  );
+}
 
 export default function Itinerary() {
   const trips = useTravelStore((state) => state.trips);
@@ -28,6 +146,15 @@ export default function Itinerary() {
   const addEvent = useTravelStore((state) => state.addEvent);
   const updateEvent = useTravelStore((state) => state.updateEvent);
   const deleteEvent = useTravelStore((state) => state.deleteEvent);
+  const reorderDaySchedules = useTravelStore((state) => state.reorderDaySchedules);
+  const sortDaySchedulesByDate = useTravelStore((state) => state.sortDaySchedulesByDate);
+  const reorderEvents = useTravelStore((state) => state.reorderEvents);
+  const sortEventsByTime = useTravelStore((state) => state.sortEventsByTime);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
   
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
@@ -129,7 +256,7 @@ export default function Itinerary() {
     setEditingEventId(null);
   };
 
-  const startEditing = (_catId: string, _dayId: string, event: any) => {
+  const startEditing = (_catId: string, _dayId: string, event: TripEvent) => {
     setNewEventTitle(event.title);
     setNewEventTime(event.time);
     setNewEventLoc(event.location);
@@ -139,6 +266,28 @@ export default function Itinerary() {
 
   const openMap = (location: string) => {
     window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`, '_blank');
+  };
+
+  const handleDayDragEnd = (cat: TripCategory, event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = cat.schedules.findIndex(day => day.id === active.id);
+    const newIndex = cat.schedules.findIndex(day => day.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+
+    reorderDaySchedules(cat.id, oldIndex, newIndex);
+  };
+
+  const handleEventDragEnd = (catId: string, day: DaySchedule, event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = day.events.findIndex(item => item.id === active.id);
+    const newIndex = day.events.findIndex(item => item.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+
+    reorderEvents(catId, day.id, oldIndex, newIndex);
   };
 
   return (
@@ -261,6 +410,11 @@ export default function Itinerary() {
                     </div>
                   </div>
                 )}
+                {cat.schedules.length > 1 && (
+                  <button onClick={() => sortDaySchedulesByDate(cat.id)} style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '0.25rem 0.6rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, marginLeft: 'auto' }}>
+                    <ArrowDownUp size={14} /> 日付順
+                  </button>
+                )}
                 <button onClick={() => setAddingDayToCat(cat.id)} style={{ background: 'none', border: 'none', color: 'var(--accent-color)', display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}>
                   <Plus size={14} /> 日付を追加
                 </button>
@@ -278,10 +432,17 @@ export default function Itinerary() {
               )}
               
               <div className="flex" style={{ flexDirection: 'column', gap: '2rem', marginTop: '1.5rem' }}>
-                {cat.schedules.map((day) => (
-                  <div key={day.id}>
-                    <div className="flex items-center justify-between mb-3">
-                      {editingDayId === day.id ? (
+                {cat.schedules.length > 0 && (
+                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(dragEvent) => handleDayDragEnd(cat, dragEvent)}>
+                    <SortableContext items={cat.schedules.map(day => day.id)} strategy={verticalListSortingStrategy}>
+                      {cat.schedules.map((day) => (
+                        <SortableDaySection key={day.id} dayId={day.id}>
+                          {(dayHandle) => (
+                  <div>
+                    <div className="flex items-center justify-between mb-3" style={{ gap: '0.5rem' }}>
+                      <div className="flex items-center gap-2" style={{ flex: 1, minWidth: 0 }}>
+                        {dayHandle}
+                        {editingDayId === day.id ? (
                         <form onSubmit={(e) => handleUpdateDay(e, cat.id, day.id)} className="flex items-center gap-2 flex-1 mr-4">
                           <input 
                             type="text" 
@@ -294,7 +455,7 @@ export default function Itinerary() {
                           <button type="submit" className="btn-primary" style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}>保存</button>
                           <button type="button" className="btn-secondary" style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }} onClick={() => setEditingDayId(null)}>キャンセル</button>
                         </form>
-                      ) : (
+                        ) : (
                         <div className="flex items-center gap-2">
                           <h4 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
                             {day.date}
@@ -322,35 +483,29 @@ export default function Itinerary() {
                             </button>
                           </div>
                         </div>
-                      )}
-                      <button onClick={() => setAddingEventTo({catId: cat.id, dayId: day.id})} style={{ background: 'var(--glass-bg)', border: '1px solid var(--accent-glow)', borderRadius: '8px', padding: '0.25rem 0.75rem', color: 'var(--accent-color)', display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}>
-                        <Plus size={14} /> 予定追加
-                      </button>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
+                        {day.events.length > 1 && (
+                          <button onClick={() => sortEventsByTime(cat.id, day.id)} style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '0.25rem 0.6rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}>
+                            <ArrowDownUp size={14} /> 時刻順
+                          </button>
+                        )}
+                        <button onClick={() => setAddingEventTo({catId: cat.id, dayId: day.id})} style={{ background: 'var(--glass-bg)', border: '1px solid var(--accent-glow)', borderRadius: '8px', padding: '0.25rem 0.75rem', color: 'var(--accent-color)', display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}>
+                          <Plus size={14} /> 予定追加
+                        </button>
+                      </div>
                     </div>
                     
                     <div className="flex" style={{ flexDirection: 'column', gap: '1.5rem', paddingLeft: '0.5rem' }}>
-                      {day.events.length > 0 ? day.events.map((event, idx) => {
-                        const Icon = getIcon(event.icon);
-                        const isExpanded = expandedEventId === event.id;
-                        
-                        return (
-                          <div key={event.id} className="flex gap-4" style={{ position: 'relative' }}>
-                            {/* Timeline line */}
-                            {idx !== day.events.length - 1 && (
-                              <div style={{ position: 'absolute', left: '19px', top: '40px', bottom: '-1.5rem', width: '2px', background: 'var(--glass-border)' }}></div>
-                            )}
-                            
-                            {/* Icon */}
-                            <div style={{ 
-                              width: '40px', height: '40px', borderRadius: '50%', 
-                              background: 'var(--glass-bg)', border: '1px solid var(--glass-border)',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              color: 'var(--text-primary)', flexShrink: 0, zIndex: 1
-                            }}>
-                              <Icon size={18} />
-                            </div>
-                            
-                            {/* Content */}
+                      {day.events.length > 0 ? (
+                        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(dragEvent) => handleEventDragEnd(cat.id, day, dragEvent)}>
+                          <SortableContext items={day.events.map(event => event.id)} strategy={verticalListSortingStrategy}>
+                            {day.events.map((event, idx) => {
+                              const isExpanded = expandedEventId === event.id;
+
+                              return (
+                                <SortableEventRow key={event.id} event={event} index={idx} total={day.events.length}>
                             <div 
                               className="glass-card w-full" 
                               style={{ padding: '1rem', cursor: 'pointer' }}
@@ -420,9 +575,12 @@ export default function Itinerary() {
                                 </>
                               )}
                             </div>
-                          </div>
-                        );
-                      }) : (
+                                </SortableEventRow>
+                              );
+                            })}
+                          </SortableContext>
+                        </DndContext>
+                      ) : (
                         <div className="glass-panel p-4 text-center text-slate-500 bg-white/40">
                           <p className="font-bold text-slate-700 text-sm mb-1">予定がありません</p>
                           <p className="text-xs">
@@ -432,7 +590,12 @@ export default function Itinerary() {
                       )}
                     </div>
                   </div>
-                ))}
+                          )}
+                        </SortableDaySection>
+                      ))}
+                    </SortableContext>
+                  </DndContext>
+                )}
                 {cat.schedules.length === 0 && (
                   <div className="glass-panel p-4 text-center text-slate-500 bg-white/40">
                     <p className="font-bold text-slate-700 text-sm mb-1">日付がありません</p>

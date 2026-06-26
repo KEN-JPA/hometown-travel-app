@@ -138,9 +138,13 @@ interface TravelStore {
   addDaySchedule: (categoryId: string, date: string) => void;
   updateDaySchedule: (categoryId: string, dayId: string, date: string) => void;
   deleteDaySchedule: (categoryId: string, dayId: string) => void;
+  reorderDaySchedules: (categoryId: string, startIndex: number, endIndex: number) => void;
+  sortDaySchedulesByDate: (categoryId: string) => void;
   addEvent: (categoryId: string, dayId: string, event: Omit<Event, 'id'>) => void;
   updateEvent: (categoryId: string, dayId: string, eventId: string, updates: Partial<Event>) => void;
   deleteEvent: (categoryId: string, dayId: string, eventId: string) => void;
+  reorderEvents: (categoryId: string, dayId: string, startIndex: number, endIndex: number) => void;
+  sortEventsByTime: (categoryId: string, dayId: string) => void;
   addBooking: (booking: Omit<Booking, 'id'>) => void;
   deleteBooking: (bookingId: string) => void;
   updateBooking: (bookingId: string, updates: Partial<Booking>) => void;
@@ -170,6 +174,52 @@ interface TravelStore {
 }
 
 const generateId = () => Math.random().toString(36).substring(2, 9);
+
+const moveItem = <T,>(items: T[], startIndex: number, endIndex: number) => {
+  const nextItems = Array.from(items);
+  const [removed] = nextItems.splice(startIndex, 1);
+  nextItems.splice(endIndex, 0, removed);
+  return nextItems;
+};
+
+const parseScheduleDateValue = (value: string) => {
+  const isoMatch = value.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (isoMatch) {
+    return Number(isoMatch[1]) * 10000 + Number(isoMatch[2]) * 100 + Number(isoMatch[3]);
+  }
+
+  const japaneseMatch = value.match(/(\d{1,2})\s*月\s*(\d{1,2})\s*日/);
+  if (japaneseMatch) {
+    return Number(japaneseMatch[1]) * 100 + Number(japaneseMatch[2]);
+  }
+
+  const slashMatch = value.match(/(\d{1,2})\s*[/.-]\s*(\d{1,2})/);
+  if (slashMatch) {
+    return Number(slashMatch[1]) * 100 + Number(slashMatch[2]);
+  }
+
+  return Number.MAX_SAFE_INTEGER;
+};
+
+const sortDaySchedules = (schedules: DaySchedule[]) => {
+  return [...schedules]
+    .map((schedule, index) => ({ schedule, index, sortValue: parseScheduleDateValue(schedule.date) }))
+    .sort((a, b) => a.sortValue - b.sortValue || a.index - b.index)
+    .map(({ schedule }) => schedule);
+};
+
+const parseEventTimeValue = (value: string) => {
+  const match = value.match(/(\d{1,2})\s*:\s*(\d{2})/);
+  if (!match) return Number.MAX_SAFE_INTEGER;
+  return Number(match[1]) * 60 + Number(match[2]);
+};
+
+const sortEvents = (events: Event[]) => {
+  return [...events]
+    .map((event, index) => ({ event, index, sortValue: parseEventTimeValue(event.time) }))
+    .sort((a, b) => a.sortValue - b.sortValue || a.index - b.index)
+    .map(({ event }) => event);
+};
 
 const sampleTrip1: Trip = {
   id: 'trip-1',
@@ -337,7 +387,7 @@ export const useTravelStore = create<TravelStore>()(
               ...trip,
               itineraryCategories: trip.itineraryCategories.map(cat => 
                 cat.id === categoryId 
-                  ? { ...cat, schedules: [...cat.schedules, { id: generateId(), date, events: [] }] }
+                  ? { ...cat, schedules: sortDaySchedules([...cat.schedules, { id: generateId(), date, events: [] }]) }
                   : cat
               )
             };
@@ -356,9 +406,9 @@ export const useTravelStore = create<TravelStore>()(
                 if (cat.id !== categoryId) return cat;
                 return {
                   ...cat,
-                  schedules: cat.schedules.map(day => 
+                  schedules: sortDaySchedules(cat.schedules.map(day =>
                     day.id === dayId ? { ...day, date } : day
-                  )
+                  ))
                 };
               })
             };
@@ -385,6 +435,44 @@ export const useTravelStore = create<TravelStore>()(
         };
       }),
 
+      reorderDaySchedules: (categoryId, startIndex, endIndex) => set((state) => {
+        if (!state.selectedTripId) return state;
+        return {
+          trips: state.trips.map(trip => {
+            if (trip.id !== state.selectedTripId) return trip;
+            return {
+              ...trip,
+              itineraryCategories: trip.itineraryCategories.map(cat => {
+                if (cat.id !== categoryId) return cat;
+                return {
+                  ...cat,
+                  schedules: moveItem(cat.schedules, startIndex, endIndex)
+                };
+              })
+            };
+          })
+        };
+      }),
+
+      sortDaySchedulesByDate: (categoryId) => set((state) => {
+        if (!state.selectedTripId) return state;
+        return {
+          trips: state.trips.map(trip => {
+            if (trip.id !== state.selectedTripId) return trip;
+            return {
+              ...trip,
+              itineraryCategories: trip.itineraryCategories.map(cat => {
+                if (cat.id !== categoryId) return cat;
+                return {
+                  ...cat,
+                  schedules: sortDaySchedules(cat.schedules)
+                };
+              })
+            };
+          })
+        };
+      }),
+
       addEvent: (categoryId, dayId, event) => set((state) => {
         if (!state.selectedTripId) return state;
         return {
@@ -397,7 +485,7 @@ export const useTravelStore = create<TravelStore>()(
                 return {
                   ...cat,
                   schedules: cat.schedules.map(day => 
-                    day.id === dayId ? { ...day, events: [...day.events, { ...event, id: generateId() }] } : day
+                    day.id === dayId ? { ...day, events: sortEvents([...day.events, { ...event, id: generateId() }]) } : day
                   )
                 };
               })
@@ -420,7 +508,7 @@ export const useTravelStore = create<TravelStore>()(
                   schedules: cat.schedules.map(day => 
                     day.id === dayId ? { 
                       ...day, 
-                      events: day.events.map(e => e.id === eventId ? { ...e, ...updates } : e) 
+                      events: sortEvents(day.events.map(e => e.id === eventId ? { ...e, ...updates } : e))
                     } : day
                   )
                 };
@@ -443,6 +531,48 @@ export const useTravelStore = create<TravelStore>()(
                   ...cat,
                   schedules: cat.schedules.map(day => 
                     day.id === dayId ? { ...day, events: day.events.filter(e => e.id !== eventId) } : day
+                  )
+                };
+              })
+            };
+          })
+        };
+      }),
+
+      reorderEvents: (categoryId, dayId, startIndex, endIndex) => set((state) => {
+        if (!state.selectedTripId) return state;
+        return {
+          trips: state.trips.map(trip => {
+            if (trip.id !== state.selectedTripId) return trip;
+            return {
+              ...trip,
+              itineraryCategories: trip.itineraryCategories.map(cat => {
+                if (cat.id !== categoryId) return cat;
+                return {
+                  ...cat,
+                  schedules: cat.schedules.map(day =>
+                    day.id === dayId ? { ...day, events: moveItem(day.events, startIndex, endIndex) } : day
+                  )
+                };
+              })
+            };
+          })
+        };
+      }),
+
+      sortEventsByTime: (categoryId, dayId) => set((state) => {
+        if (!state.selectedTripId) return state;
+        return {
+          trips: state.trips.map(trip => {
+            if (trip.id !== state.selectedTripId) return trip;
+            return {
+              ...trip,
+              itineraryCategories: trip.itineraryCategories.map(cat => {
+                if (cat.id !== categoryId) return cat;
+                return {
+                  ...cat,
+                  schedules: cat.schedules.map(day =>
+                    day.id === dayId ? { ...day, events: sortEvents(day.events) } : day
                   )
                 };
               })

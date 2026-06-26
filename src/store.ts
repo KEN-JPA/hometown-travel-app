@@ -144,6 +144,7 @@ interface TravelStore {
   updateEvent: (categoryId: string, dayId: string, eventId: string, updates: Partial<Event>) => void;
   deleteEvent: (categoryId: string, dayId: string, eventId: string) => void;
   reorderEvents: (categoryId: string, dayId: string, startIndex: number, endIndex: number) => void;
+  moveEventBetweenDays: (categoryId: string, fromDayId: string, toDayId: string, eventId: string, toIndex: number) => void;
   sortEventsByTime: (categoryId: string, dayId: string) => void;
   addBooking: (booking: Omit<Booking, 'id'>) => void;
   deleteBooking: (bookingId: string) => void;
@@ -553,6 +554,65 @@ export const useTravelStore = create<TravelStore>()(
                   schedules: cat.schedules.map(day =>
                     day.id === dayId ? { ...day, events: moveItem(day.events, startIndex, endIndex) } : day
                   )
+                };
+              })
+            };
+          })
+        };
+      }),
+
+      moveEventBetweenDays: (categoryId, fromDayId, toDayId, eventId, toIndex) => set((state) => {
+        if (!state.selectedTripId) return state;
+        return {
+          trips: state.trips.map(trip => {
+            if (trip.id !== state.selectedTripId) return trip;
+            return {
+              ...trip,
+              itineraryCategories: trip.itineraryCategories.map(cat => {
+                if (cat.id !== categoryId) return cat;
+
+                const sourceDay = cat.schedules.find(day => day.id === fromDayId);
+                const eventToMove = sourceDay?.events.find(event => event.id === eventId);
+                if (!eventToMove) return cat;
+
+                return {
+                  ...cat,
+                  schedules: cat.schedules.map(day => {
+                    if (day.id === fromDayId && day.id === toDayId) {
+                      const remainingEvents = day.events.filter(event => event.id !== eventId);
+                      const insertIndex = Math.max(0, Math.min(toIndex, remainingEvents.length));
+                      return {
+                        ...day,
+                        events: [
+                          ...remainingEvents.slice(0, insertIndex),
+                          eventToMove,
+                          ...remainingEvents.slice(insertIndex)
+                        ]
+                      };
+                    }
+
+                    if (day.id === fromDayId) {
+                      return {
+                        ...day,
+                        events: day.events.filter(event => event.id !== eventId)
+                      };
+                    }
+
+                    if (day.id === toDayId) {
+                      const targetEvents = day.events.filter(event => event.id !== eventId);
+                      const insertIndex = Math.max(0, Math.min(toIndex, targetEvents.length));
+                      return {
+                        ...day,
+                        events: [
+                          ...targetEvents.slice(0, insertIndex),
+                          eventToMove,
+                          ...targetEvents.slice(insertIndex)
+                        ]
+                      };
+                    }
+
+                    return day;
+                  })
                 };
               })
             };

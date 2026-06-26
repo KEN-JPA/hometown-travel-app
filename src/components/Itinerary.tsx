@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Plane, Car, Home, Building2, Ticket, MapPin, Plus, FolderPlus, Map, GripVertical, ArrowDownUp } from 'lucide-react';
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -19,8 +19,14 @@ const renderIcon = (type: IconType, size = 18) => {
   }
 };
 
+const dayDragId = (dayId: string) => `day:${dayId}`;
+const eventDragId = (eventId: string) => `event:${eventId}`;
+const dayDropId = (dayId: string) => `day-drop:${dayId}`;
+
+const stripDragPrefix = (id: string) => id.split(':').slice(1).join(':');
+
 function SortableDaySection({ dayId, children }: { dayId: string; children: (handle: React.ReactNode) => React.ReactNode }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: dayId });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: dayDragId(dayId) });
 
   const handle = (
     <button
@@ -74,7 +80,7 @@ function SortableEventRow({
   total: number;
   children: React.ReactNode;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: event.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: eventDragId(event.id) });
 
   return (
     <div
@@ -133,6 +139,34 @@ function SortableEventRow({
   );
 }
 
+function DayEventDropZone({
+  dayId,
+  children,
+}: {
+  dayId: string;
+  children: React.ReactNode;
+}) {
+  const { isOver, setNodeRef } = useDroppable({ id: dayDropId(dayId) });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className="flex"
+      style={{
+        flexDirection: 'column',
+        gap: '1.5rem',
+        paddingLeft: '0.5rem',
+        borderRadius: '18px',
+        outline: isOver ? '2px dashed var(--accent-color)' : '2px dashed transparent',
+        outlineOffset: '0.35rem',
+        transition: 'outline-color 160ms ease',
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 export default function Itinerary() {
   const trips = useTravelStore((state) => state.trips);
   const selectedTripId = useTravelStore((state) => state.selectedTripId);
@@ -149,6 +183,7 @@ export default function Itinerary() {
   const reorderDaySchedules = useTravelStore((state) => state.reorderDaySchedules);
   const sortDaySchedulesByDate = useTravelStore((state) => state.sortDaySchedulesByDate);
   const reorderEvents = useTravelStore((state) => state.reorderEvents);
+  const moveEventBetweenDays = useTravelStore((state) => state.moveEventBetweenDays);
   const sortEventsByTime = useTravelStore((state) => state.sortEventsByTime);
 
   const sensors = useSensors(
@@ -268,26 +303,76 @@ export default function Itinerary() {
     window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`, '_blank');
   };
 
-  const handleDayDragEnd = (cat: TripCategory, event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-
-    const oldIndex = cat.schedules.findIndex(day => day.id === active.id);
-    const newIndex = cat.schedules.findIndex(day => day.id === over.id);
-    if (oldIndex < 0 || newIndex < 0) return;
-
-    reorderDaySchedules(cat.id, oldIndex, newIndex);
+  const findEventLocation = (cat: TripCategory, eventId: string): { day: DaySchedule; eventIndex: number } | null => {
+    for (const day of cat.schedules) {
+      const eventIndex = day.events.findIndex(item => item.id === eventId);
+      if (eventIndex >= 0) {
+        return { day, eventIndex };
+      }
+    }
+    return null;
   };
 
-  const handleEventDragEnd = (catId: string, day: DaySchedule, event: DragEndEvent) => {
+  const findDayIdFromDropTarget = (cat: TripCategory, targetId: string) => {
+    if (targetId.startsWith('day:')) return stripDragPrefix(targetId);
+    if (targetId.startsWith('day-drop:')) return stripDragPrefix(targetId);
+    if (targetId.startsWith('event:')) {
+      return findEventLocation(cat, stripDragPrefix(targetId))?.day.id ?? null;
+    }
+    return null;
+  };
+
+  const handleScheduleDragEnd = (cat: TripCategory, event: DragEndEvent) => {
     const { active, over } = event;
-    if (!over || active.id === over.id) return;
+    if (!over) return;
 
-    const oldIndex = day.events.findIndex(item => item.id === active.id);
-    const newIndex = day.events.findIndex(item => item.id === over.id);
-    if (oldIndex < 0 || newIndex < 0) return;
+    const activeId = String(active.id);
+    const overId = String(over.id);
+    if (activeId === overId) return;
 
-    reorderEvents(catId, day.id, oldIndex, newIndex);
+    if (activeId.startsWith('day:')) {
+      const activeDayId = stripDragPrefix(activeId);
+      const overDayId = findDayIdFromDropTarget(cat, overId);
+      if (!overDayId || activeDayId === overDayId) return;
+
+      const oldIndex = cat.schedules.findIndex(day => day.id === activeDayId);
+      const newIndex = cat.schedules.findIndex(day => day.id === overDayId);
+      if (oldIndex < 0 || newIndex < 0) return;
+
+      reorderDaySchedules(cat.id, oldIndex, newIndex);
+      return;
+    }
+
+    if (!activeId.startsWith('event:')) return;
+
+    const activeEventId = stripDragPrefix(activeId);
+    const sourceLocation = findEventLocation(cat, activeEventId);
+    if (!sourceLocation) return;
+
+    let targetDayId: string | null = null;
+    let targetIndex: number;
+
+    if (overId.startsWith('event:')) {
+      const targetLocation = findEventLocation(cat, stripDragPrefix(overId));
+      if (!targetLocation) return;
+      targetDayId = targetLocation.day.id;
+      targetIndex = targetLocation.eventIndex;
+    } else {
+      targetDayId = findDayIdFromDropTarget(cat, overId);
+      const targetDay = cat.schedules.find(day => day.id === targetDayId);
+      if (!targetDay) return;
+      targetIndex = targetDay.events.length;
+    }
+
+    if (!targetDayId) return;
+
+    if (sourceLocation.day.id === targetDayId) {
+      if (sourceLocation.eventIndex === targetIndex) return;
+      reorderEvents(cat.id, sourceLocation.day.id, sourceLocation.eventIndex, targetIndex);
+      return;
+    }
+
+    moveEventBetweenDays(cat.id, sourceLocation.day.id, targetDayId, activeEventId, targetIndex);
   };
 
   return (
@@ -433,8 +518,8 @@ export default function Itinerary() {
               
               <div className="flex" style={{ flexDirection: 'column', gap: '2rem', marginTop: '1.5rem' }}>
                 {cat.schedules.length > 0 && (
-                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(dragEvent) => handleDayDragEnd(cat, dragEvent)}>
-                    <SortableContext items={cat.schedules.map(day => day.id)} strategy={verticalListSortingStrategy}>
+                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(dragEvent) => handleScheduleDragEnd(cat, dragEvent)}>
+                    <SortableContext items={cat.schedules.map(day => dayDragId(day.id))} strategy={verticalListSortingStrategy}>
                       {cat.schedules.map((day) => (
                         <SortableDaySection key={day.id} dayId={day.id}>
                           {(dayHandle) => (
@@ -497,10 +582,9 @@ export default function Itinerary() {
                       </div>
                     </div>
                     
-                    <div className="flex" style={{ flexDirection: 'column', gap: '1.5rem', paddingLeft: '0.5rem' }}>
+                    <DayEventDropZone dayId={day.id}>
                       {day.events.length > 0 ? (
-                        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(dragEvent) => handleEventDragEnd(cat.id, day, dragEvent)}>
-                          <SortableContext items={day.events.map(event => event.id)} strategy={verticalListSortingStrategy}>
+                        <SortableContext items={day.events.map(event => eventDragId(event.id))} strategy={verticalListSortingStrategy}>
                             {day.events.map((event, idx) => {
                               const isExpanded = expandedEventId === event.id;
 
@@ -578,8 +662,7 @@ export default function Itinerary() {
                                 </SortableEventRow>
                               );
                             })}
-                          </SortableContext>
-                        </DndContext>
+                        </SortableContext>
                       ) : (
                         <div className="glass-panel p-4 text-center text-slate-500 bg-white/40">
                           <p className="font-bold text-slate-700 text-sm mb-1">予定がありません</p>
@@ -588,7 +671,7 @@ export default function Itinerary() {
                           </p>
                         </div>
                       )}
-                    </div>
+                    </DayEventDropZone>
                   </div>
                           )}
                         </SortableDaySection>

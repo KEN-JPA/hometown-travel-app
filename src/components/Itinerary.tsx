@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plane, Car, Home, Building2, Ticket, MapPin, Plus, FolderPlus, Map, GripVertical, ArrowDownUp, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plane, Car, Home, Building2, Ticket, MapPin, Plus, FolderPlus, Map, GripVertical, ArrowDownUp, ChevronDown, ChevronRight, CalendarDays, Clock3 } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -24,6 +24,22 @@ const eventDragId = (eventId: string) => `event:${eventId}`;
 const dayDropId = (dayId: string) => `day-drop:${dayId}`;
 
 const stripDragPrefix = (id: string) => id.split(':').slice(1).join(':');
+
+const getDaySummary = (day: DaySchedule) => {
+  const firstEvent = day.events[0];
+  const lastEvent = day.events[day.events.length - 1];
+  const timeRange = firstEvent && lastEvent
+    ? firstEvent.time === lastEvent.time ? firstEvent.time : `${firstEvent.time} - ${lastEvent.time}`
+    : '予定なし';
+  const previewEvents = day.events.slice(0, 2).map(event => `${event.time} ${event.title}`);
+  const hiddenCount = Math.max(day.events.length - previewEvents.length, 0);
+
+  return {
+    timeRange,
+    preview: previewEvents.length > 0 ? previewEvents.join(' / ') : 'まだ予定がありません',
+    hiddenCount
+  };
+};
 
 function SortableDaySection({ dayId, children }: { dayId: string; children: (handle: React.ReactNode) => React.ReactNode }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: dayDragId(dayId) });
@@ -192,6 +208,7 @@ export default function Itinerary() {
   );
   
   const [expandedEventIds, setExpandedEventIds] = useState<Record<string, boolean>>({});
+  const [collapsedDayIds, setCollapsedDayIds] = useState<Record<string, boolean>>({});
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   
   const [isAddingCat, setIsAddingCat] = useState(false);
@@ -251,6 +268,28 @@ export default function Itinerary() {
     }));
   };
 
+  const isDayCollapsed = (dayId: string) => collapsedDayIds[dayId] !== false;
+
+  const toggleDay = (dayId: string) => {
+    setCollapsedDayIds(prev => {
+      const currentlyCollapsed = prev[dayId] !== false;
+      return {
+        ...prev,
+        [dayId]: !currentlyCollapsed
+      };
+    });
+  };
+
+  const setCategoryDaysCollapsed = (cat: TripCategory, collapsed: boolean) => {
+    setCollapsedDayIds(prev => {
+      const next = { ...prev };
+      cat.schedules.forEach(day => {
+        next[day.id] = collapsed;
+      });
+      return next;
+    });
+  };
+
   const handleAddCat = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCatName) return;
@@ -276,6 +315,7 @@ export default function Itinerary() {
       location: newEventLoc,
       icon: newEventIcon
     });
+    setCollapsedDayIds(prev => ({ ...prev, [addingEventTo.dayId]: false }));
     setAddingEventTo(null);
     setNewEventTitle('');
     setNewEventTime('');
@@ -518,12 +558,123 @@ export default function Itinerary() {
                   </div>
                 </form>
               )}
+
+              {cat.schedules.length > 0 && (
+                <div className="glass-card mb-4" style={{ padding: '0.85rem', background: 'rgba(255,255,255,0.68)', borderRadius: '16px' }}>
+                  <div className="flex items-center justify-between" style={{ gap: '0.75rem', marginBottom: '0.75rem' }}>
+                    <div className="flex items-center gap-2" style={{ minWidth: 0 }}>
+                      <div style={{
+                        width: 34,
+                        height: 34,
+                        borderRadius: '12px',
+                        background: 'rgba(255, 140, 148, 0.14)',
+                        color: 'var(--accent-color)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0
+                      }}>
+                        <CalendarDays size={18} />
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                          日程まとめ
+                        </div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                          {cat.schedules.length}日程 / {cat.schedules.reduce((total, day) => total + day.events.length, 0)}件
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex" style={{ gap: '0.35rem', flexShrink: 0 }}>
+                      <button
+                        type="button"
+                        onClick={() => setCategoryDaysCollapsed(cat, false)}
+                        className="btn-secondary"
+                        style={{ padding: '0.35rem 0.55rem', fontSize: '0.72rem', borderRadius: '999px' }}
+                      >
+                        開く
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCategoryDaysCollapsed(cat, true)}
+                        className="btn-secondary"
+                        style={{ padding: '0.35rem 0.55rem', fontSize: '0.72rem', borderRadius: '999px' }}
+                      >
+                        閉じる
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex" style={{ flexDirection: 'column', gap: '0.5rem' }}>
+                    {cat.schedules.map(day => {
+                      const daySummary = getDaySummary(day);
+                      const dayCollapsed = isDayCollapsed(day.id);
+
+                      return (
+                        <button
+                          key={day.id}
+                          type="button"
+                          onClick={() => toggleDay(day.id)}
+                          aria-expanded={!dayCollapsed}
+                          className="w-full"
+                          style={{
+                            border: '1px solid var(--glass-border)',
+                            borderRadius: '14px',
+                            background: dayCollapsed ? 'rgba(255,255,255,0.48)' : 'rgba(255,255,255,0.82)',
+                            color: 'var(--text-primary)',
+                            cursor: 'pointer',
+                            padding: '0.7rem 0.75rem',
+                            textAlign: 'left',
+                            boxShadow: dayCollapsed ? 'none' : '0 4px 14px rgba(255, 140, 148, 0.14)'
+                          }}
+                        >
+                          <div className="flex" style={{ alignItems: 'flex-start', gap: '0.6rem', minWidth: 0 }}>
+                            <span style={{
+                              width: 22,
+                              height: 22,
+                              borderRadius: '50%',
+                              border: '1px solid var(--glass-border)',
+                              color: 'var(--accent-color)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
+                              marginTop: '0.1rem'
+                            }}>
+                              {dayCollapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
+                            </span>
+                            <span style={{ minWidth: 0, flex: 1 }}>
+                              <span style={{ display: 'block', fontSize: '0.88rem', fontWeight: 800, lineHeight: 1.35, wordBreak: 'break-word' }}>
+                                {day.date}
+                              </span>
+                              <span className="flex" style={{ alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap', color: 'var(--text-secondary)', fontSize: '0.72rem', fontWeight: 700, marginTop: '0.3rem' }}>
+                                <span className="flex items-center gap-1">
+                                  <Clock3 size={13} /> {daySummary.timeRange}
+                                </span>
+                                <span>{day.events.length}件</span>
+                                {daySummary.hiddenCount > 0 && <span>ほか{daySummary.hiddenCount}件</span>}
+                              </span>
+                              <span style={{ display: 'block', color: 'var(--text-secondary)', fontSize: '0.74rem', lineHeight: 1.45, marginTop: '0.35rem', wordBreak: 'break-word' }}>
+                                {daySummary.preview}
+                              </span>
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               
               <div className="flex" style={{ flexDirection: 'column', gap: '2rem', marginTop: '1.5rem' }}>
                 {cat.schedules.length > 0 && (
                   <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(dragEvent) => handleScheduleDragEnd(cat, dragEvent)}>
                     <SortableContext items={cat.schedules.map(day => dayDragId(day.id))} strategy={verticalListSortingStrategy}>
-                      {cat.schedules.map((day) => (
+                      {cat.schedules.map((day) => {
+                        const daySummary = getDaySummary(day);
+                        const dayCollapsed = isDayCollapsed(day.id);
+
+                        return (
                         <SortableDaySection key={day.id} dayId={day.id}>
                           {(dayHandle) => (
                   <div>
@@ -544,10 +695,38 @@ export default function Itinerary() {
                           <button type="button" className="btn-secondary" style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }} onClick={() => setEditingDayId(null)}>キャンセル</button>
                         </form>
                         ) : (
-                        <div className="flex items-center gap-2">
-                          <h4 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                            {day.date}
-                          </h4>
+                        <div className="flex items-center gap-2" style={{ minWidth: 0 }}>
+                          <button
+                            type="button"
+                            onClick={() => toggleDay(day.id)}
+                            title={dayCollapsed ? '日程を開く' : '日程を閉じる'}
+                            aria-label={dayCollapsed ? '日程を開く' : '日程を閉じる'}
+                            aria-expanded={!dayCollapsed}
+                            style={{
+                              width: 28,
+                              height: 28,
+                              borderRadius: '50%',
+                              border: '1px solid var(--glass-border)',
+                              background: 'var(--glass-bg)',
+                              color: 'var(--accent-color)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              flexShrink: 0
+                            }}
+                          >
+                            {dayCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+                          </button>
+                          <div style={{ minWidth: 0 }}>
+                            <h4 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-secondary)', wordBreak: 'break-word' }}>
+                              {day.date}
+                            </h4>
+                            <div className="flex items-center gap-2" style={{ flexWrap: 'wrap', fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 700, marginTop: '0.15rem' }}>
+                              <span>{daySummary.timeRange}</span>
+                              <span>{day.events.length}件</span>
+                            </div>
+                          </div>
                           <div className="flex gap-1">
                             <button 
                               onClick={() => startEditingDay(day.id, day.date)} 
@@ -585,6 +764,7 @@ export default function Itinerary() {
                       </div>
                     </div>
                     
+                    {!dayCollapsed && (
                     <DayEventDropZone dayId={day.id}>
                       {day.events.length > 0 ? (
                         <SortableContext items={day.events.map(event => eventDragId(event.id))} strategy={verticalListSortingStrategy}>
@@ -706,10 +886,12 @@ export default function Itinerary() {
                         </div>
                       )}
                     </DayEventDropZone>
+                    )}
                   </div>
                           )}
                         </SortableDaySection>
-                      ))}
+                        );
+                      })}
                     </SortableContext>
                   </DndContext>
                 )}

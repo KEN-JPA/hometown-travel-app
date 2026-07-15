@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plane, Car, Home, Building2, Ticket, MapPin, Plus, FolderPlus, Map, GripVertical, ArrowDownUp, ChevronDown, ChevronRight, CalendarDays, Clock3 } from 'lucide-react';
+import { Plane, Car, Home, Building2, Ticket, MapPin, Plus, FolderPlus, Map as MapIcon, GripVertical, ArrowDownUp, ChevronDown, ChevronRight, CalendarDays, Clock3 } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -39,6 +39,113 @@ const getDaySummary = (day: DaySchedule) => {
     preview: previewEvents.length > 0 ? previewEvents.join(' / ') : 'まだ予定がありません',
     hiddenCount
   };
+};
+
+const getDateInfo = (value: string) => {
+  const isoMatch = value.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (isoMatch) {
+    const year = Number(isoMatch[1]);
+    const month = Number(isoMatch[2]);
+    const day = Number(isoMatch[3]);
+    return {
+      key: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+      label: `${month}月${day}日`,
+      sortValue: year * 10000 + month * 100 + day
+    };
+  }
+
+  const japaneseMatch = value.match(/(\d{1,2})\s*月\s*(\d{1,2})\s*日\s*(?:[（(]\s*([^）)]+)\s*[）)])?/);
+  if (japaneseMatch) {
+    const month = Number(japaneseMatch[1]);
+    const day = Number(japaneseMatch[2]);
+    const weekday = japaneseMatch[3]?.trim();
+    return {
+      key: `${month}-${day}`,
+      label: `${month}月${day}日${weekday ? ` (${weekday})` : ''}`,
+      sortValue: month * 100 + day
+    };
+  }
+
+  const slashMatch = value.match(/(\d{1,2})\s*[/.-]\s*(\d{1,2})/);
+  if (slashMatch) {
+    const month = Number(slashMatch[1]);
+    const day = Number(slashMatch[2]);
+    return {
+      key: `${month}-${day}`,
+      label: `${month}月${day}日`,
+      sortValue: month * 100 + day
+    };
+  }
+
+  return {
+    key: value,
+    label: value,
+    sortValue: Number.MAX_SAFE_INTEGER
+  };
+};
+
+const parseEventTimeValue = (value: string) => {
+  const match = value.match(/(\d{1,2})\s*:\s*(\d{2})/);
+  if (!match) return Number.MAX_SAFE_INTEGER;
+  return Number(match[1]) * 60 + Number(match[2]);
+};
+
+type DateGroupEvent = TripEvent & {
+  categoryId: string;
+  categoryName: string;
+  dayId: string;
+  dayDate: string;
+  eventIndex: number;
+};
+
+const getDateGroups = (categories: TripCategory[]) => {
+  const groups = new Map<string, {
+    key: string;
+    label: string;
+    sortValue: number;
+    events: DateGroupEvent[];
+    categoryNames: Set<string>;
+  }>();
+
+  categories.forEach((cat) => {
+    cat.schedules.forEach((day) => {
+      const dateInfo = getDateInfo(day.date);
+      const existingGroup = groups.get(dateInfo.key);
+      const group = existingGroup ?? {
+        key: dateInfo.key,
+        label: dateInfo.label,
+        sortValue: dateInfo.sortValue,
+        events: [],
+        categoryNames: new Set<string>()
+      };
+
+      group.categoryNames.add(cat.name);
+      day.events.forEach((event, eventIndex) => {
+        group.events.push({
+          ...event,
+          categoryId: cat.id,
+          categoryName: cat.name,
+          dayId: day.id,
+          dayDate: day.date,
+          eventIndex
+        });
+      });
+
+      groups.set(dateInfo.key, group);
+    });
+  });
+
+  return Array.from(groups.values())
+    .map(group => ({
+      ...group,
+      categoryNames: Array.from(group.categoryNames),
+      events: [...group.events].sort((a, b) =>
+        parseEventTimeValue(a.time) - parseEventTimeValue(b.time) ||
+        a.categoryName.localeCompare(b.categoryName, 'ja') ||
+        a.eventIndex - b.eventIndex
+      )
+    }))
+    .sort((a, b) => a.sortValue - b.sortValue || a.label.localeCompare(b.label, 'ja'));
 };
 
 function SortableDaySection({ dayId, children }: { dayId: string; children: (handle: React.ReactNode) => React.ReactNode }) {
@@ -209,6 +316,7 @@ export default function Itinerary() {
   
   const [expandedEventIds, setExpandedEventIds] = useState<Record<string, boolean>>({});
   const [collapsedDayIds, setCollapsedDayIds] = useState<Record<string, boolean>>({});
+  const [collapsedDateGroupIds, setCollapsedDateGroupIds] = useState<Record<string, boolean>>({});
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   
   const [isAddingCat, setIsAddingCat] = useState(false);
@@ -260,6 +368,7 @@ export default function Itinerary() {
   }
 
   const categories = selectedTrip.itineraryCategories;
+  const dateGroups = getDateGroups(categories);
 
   const toggleEvent = (id: string) => {
     setExpandedEventIds(prev => ({
@@ -280,11 +389,20 @@ export default function Itinerary() {
     });
   };
 
-  const setCategoryDaysCollapsed = (cat: TripCategory, collapsed: boolean) => {
-    setCollapsedDayIds(prev => {
+  const isDateGroupCollapsed = (dateKey: string) => collapsedDateGroupIds[dateKey] === true;
+
+  const toggleDateGroup = (dateKey: string) => {
+    setCollapsedDateGroupIds(prev => ({
+      ...prev,
+      [dateKey]: !prev[dateKey]
+    }));
+  };
+
+  const setAllDateGroupsCollapsed = (collapsed: boolean) => {
+    setCollapsedDateGroupIds(prev => {
       const next = { ...prev };
-      cat.schedules.forEach(day => {
-        next[day.id] = collapsed;
+      dateGroups.forEach(group => {
+        next[group.key] = collapsed;
       });
       return next;
     });
@@ -490,7 +608,195 @@ export default function Itinerary() {
           </div>
         </form>
       )}
+
+      {dateGroups.length > 0 && (
+        <section className="glass-panel mb-6" style={{ padding: '1rem', background: 'rgba(255,255,255,0.62)' }}>
+          <div className="flex items-center justify-between" style={{ gap: '0.75rem', marginBottom: '0.9rem' }}>
+            <div className="flex items-center gap-2" style={{ minWidth: 0 }}>
+              <div style={{
+                width: 38,
+                height: 38,
+                borderRadius: '12px',
+                background: 'rgba(255, 140, 148, 0.14)',
+                color: 'var(--accent-color)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0
+              }}>
+                <CalendarDays size={20} />
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <h3 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.35 }}>
+                  日付ごとのタイムスケジュール
+                </h3>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 700, marginTop: '0.1rem' }}>
+                  {dateGroups.length}日分 / {dateGroups.reduce((total, group) => total + group.events.length, 0)}件
+                </div>
+              </div>
+            </div>
+            <div className="flex" style={{ gap: '0.35rem', flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={() => setAllDateGroupsCollapsed(false)}
+                className="btn-secondary"
+                style={{ padding: '0.35rem 0.55rem', fontSize: '0.72rem', borderRadius: '999px' }}
+              >
+                全て開く
+              </button>
+              <button
+                type="button"
+                onClick={() => setAllDateGroupsCollapsed(true)}
+                className="btn-secondary"
+                style={{ padding: '0.35rem 0.55rem', fontSize: '0.72rem', borderRadius: '999px' }}
+              >
+                全て閉じる
+              </button>
+            </div>
+          </div>
+
+          <div className="flex" style={{ flexDirection: 'column', gap: '0.7rem' }}>
+            {dateGroups.map(group => {
+              const isCollapsed = isDateGroupCollapsed(group.key);
+              const firstEvent = group.events[0];
+              const lastEvent = group.events[group.events.length - 1];
+              const timeRange = firstEvent && lastEvent
+                ? firstEvent.time === lastEvent.time ? firstEvent.time : `${firstEvent.time} - ${lastEvent.time}`
+                : '予定なし';
+
+              return (
+                <div
+                  key={group.key}
+                  style={{
+                    border: '1px solid var(--glass-border)',
+                    borderRadius: '16px',
+                    background: 'rgba(255,255,255,0.72)',
+                    overflow: 'hidden'
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => toggleDateGroup(group.key)}
+                    aria-expanded={!isCollapsed}
+                    className="w-full"
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      color: 'var(--text-primary)',
+                      cursor: 'pointer',
+                      padding: '0.75rem',
+                      textAlign: 'left'
+                    }}
+                  >
+                    <div className="flex" style={{ alignItems: 'center', gap: '0.65rem', minWidth: 0 }}>
+                      <span style={{
+                        width: 26,
+                        height: 26,
+                        borderRadius: '50%',
+                        border: '1px solid var(--glass-border)',
+                        color: 'var(--accent-color)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0
+                      }}>
+                        {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+                      </span>
+                      <span style={{ minWidth: 0, flex: 1 }}>
+                        <span style={{ display: 'block', fontSize: '1rem', fontWeight: 800, lineHeight: 1.35, wordBreak: 'break-word' }}>
+                          {group.label}
+                        </span>
+                        <span className="flex" style={{ alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap', color: 'var(--text-secondary)', fontSize: '0.75rem', fontWeight: 700, marginTop: '0.25rem' }}>
+                          <span className="flex items-center gap-1">
+                            <Clock3 size={13} /> {timeRange}
+                          </span>
+                          <span>{group.events.length}件</span>
+                          <span>{group.categoryNames.length}分類</span>
+                        </span>
+                      </span>
+                    </div>
+                  </button>
+
+                  {!isCollapsed && (
+                    <div style={{ padding: '0 0.75rem 0.85rem 2.55rem' }}>
+                      <div className="flex" style={{ flexDirection: 'column', gap: '0.6rem' }}>
+                        {group.events.length > 0 ? group.events.map((event, index) => (
+                          <div key={`${event.categoryId}-${event.dayId}-${event.id}`} className="flex" style={{ gap: '0.65rem', position: 'relative' }}>
+                            {index !== group.events.length - 1 && (
+                              <div style={{ position: 'absolute', left: 17, top: 34, bottom: '-0.65rem', width: 2, background: 'var(--glass-border)' }}></div>
+                            )}
+                            <div style={{
+                              width: 34,
+                              height: 34,
+                              borderRadius: '50%',
+                              background: 'var(--glass-bg)',
+                              border: '1px solid var(--glass-border)',
+                              color: 'var(--text-primary)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
+                              zIndex: 1
+                            }}>
+                              {renderIcon(event.icon, 16)}
+                            </div>
+                            <div style={{ minWidth: 0, flex: 1, paddingBottom: '0.1rem' }}>
+                              <div className="flex" style={{ alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap', marginBottom: '0.2rem' }}>
+                                <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 800 }}>
+                                  {event.time}
+                                </span>
+                                <span style={{
+                                  borderRadius: '999px',
+                                  background: 'rgba(255, 140, 148, 0.12)',
+                                  color: 'var(--accent-color)',
+                                  padding: '0.12rem 0.45rem',
+                                  fontSize: '0.68rem',
+                                  fontWeight: 800,
+                                  maxWidth: '100%',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap'
+                                }}>
+                                  {event.categoryName}
+                                </span>
+                              </div>
+                              <div style={{ fontSize: '0.94rem', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.45, wordBreak: 'break-word' }}>
+                                {event.title}
+                              </div>
+                              {event.location && (
+                                <div className="flex items-center gap-1" style={{ marginTop: '0.2rem', fontSize: '0.78rem', color: 'var(--text-secondary)', minWidth: 0 }}>
+                                  <MapPin size={13} style={{ flexShrink: 0 }} />
+                                  <span style={{ wordBreak: 'break-word' }}>{event.location}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )) : (
+                          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 700 }}>
+                            この日の予定はまだありません。
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
       
+      {categories.length > 0 && (
+        <div className="mb-4" style={{ padding: '0 0.15rem' }}>
+          <h3 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.15rem' }}>
+            分類別の予定
+          </h3>
+          <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+            観光遊び・交通・航空券・宿泊など、元の項目もそのまま確認できます。
+          </p>
+        </div>
+      )}
+
       <div className="flex" style={{ flexDirection: 'column', gap: '3rem' }}>
         {categories.length > 0 ? (
           categories.map((cat) => (
@@ -559,113 +865,6 @@ export default function Itinerary() {
                 </form>
               )}
 
-              {cat.schedules.length > 0 && (
-                <div className="glass-card mb-4" style={{ padding: '0.85rem', background: 'rgba(255,255,255,0.68)', borderRadius: '16px' }}>
-                  <div className="flex items-center justify-between" style={{ gap: '0.75rem', marginBottom: '0.75rem' }}>
-                    <div className="flex items-center gap-2" style={{ minWidth: 0 }}>
-                      <div style={{
-                        width: 34,
-                        height: 34,
-                        borderRadius: '12px',
-                        background: 'rgba(255, 140, 148, 0.14)',
-                        color: 'var(--accent-color)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0
-                      }}>
-                        <CalendarDays size={18} />
-                      </div>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                          日程まとめ
-                        </div>
-                        <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
-                          {cat.schedules.length}日程 / {cat.schedules.reduce((total, day) => total + day.events.length, 0)}件
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex" style={{ gap: '0.35rem', flexShrink: 0 }}>
-                      <button
-                        type="button"
-                        onClick={() => setCategoryDaysCollapsed(cat, false)}
-                        className="btn-secondary"
-                        style={{ padding: '0.35rem 0.55rem', fontSize: '0.72rem', borderRadius: '999px' }}
-                      >
-                        開く
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setCategoryDaysCollapsed(cat, true)}
-                        className="btn-secondary"
-                        style={{ padding: '0.35rem 0.55rem', fontSize: '0.72rem', borderRadius: '999px' }}
-                      >
-                        閉じる
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="flex" style={{ flexDirection: 'column', gap: '0.5rem' }}>
-                    {cat.schedules.map(day => {
-                      const daySummary = getDaySummary(day);
-                      const dayCollapsed = isDayCollapsed(day.id);
-
-                      return (
-                        <button
-                          key={day.id}
-                          type="button"
-                          onClick={() => toggleDay(day.id)}
-                          aria-expanded={!dayCollapsed}
-                          className="w-full"
-                          style={{
-                            border: '1px solid var(--glass-border)',
-                            borderRadius: '14px',
-                            background: dayCollapsed ? 'rgba(255,255,255,0.48)' : 'rgba(255,255,255,0.82)',
-                            color: 'var(--text-primary)',
-                            cursor: 'pointer',
-                            padding: '0.7rem 0.75rem',
-                            textAlign: 'left',
-                            boxShadow: dayCollapsed ? 'none' : '0 4px 14px rgba(255, 140, 148, 0.14)'
-                          }}
-                        >
-                          <div className="flex" style={{ alignItems: 'flex-start', gap: '0.6rem', minWidth: 0 }}>
-                            <span style={{
-                              width: 22,
-                              height: 22,
-                              borderRadius: '50%',
-                              border: '1px solid var(--glass-border)',
-                              color: 'var(--accent-color)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              flexShrink: 0,
-                              marginTop: '0.1rem'
-                            }}>
-                              {dayCollapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
-                            </span>
-                            <span style={{ minWidth: 0, flex: 1 }}>
-                              <span style={{ display: 'block', fontSize: '0.88rem', fontWeight: 800, lineHeight: 1.35, wordBreak: 'break-word' }}>
-                                {day.date}
-                              </span>
-                              <span className="flex" style={{ alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap', color: 'var(--text-secondary)', fontSize: '0.72rem', fontWeight: 700, marginTop: '0.3rem' }}>
-                                <span className="flex items-center gap-1">
-                                  <Clock3 size={13} /> {daySummary.timeRange}
-                                </span>
-                                <span>{day.events.length}件</span>
-                                {daySummary.hiddenCount > 0 && <span>ほか{daySummary.hiddenCount}件</span>}
-                              </span>
-                              <span style={{ display: 'block', color: 'var(--text-secondary)', fontSize: '0.74rem', lineHeight: 1.45, marginTop: '0.35rem', wordBreak: 'break-word' }}>
-                                {daySummary.preview}
-                              </span>
-                            </span>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-              
               <div className="flex" style={{ flexDirection: 'column', gap: '2rem', marginTop: '1.5rem' }}>
                 {cat.schedules.length > 0 && (
                   <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(dragEvent) => handleScheduleDragEnd(cat, dragEvent)}>
@@ -859,7 +1058,7 @@ export default function Itinerary() {
                                     <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px dashed var(--glass-border)', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                                       <div className="flex gap-2">
                                         <button onClick={(e) => { e.stopPropagation(); openMap(event.location); }} className="btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem', background: 'var(--glass-bg)', color: 'var(--accent-color)', border: '1px solid var(--glass-border)', boxShadow: 'none' }}>
-                                          <Map size={14} /> マップ
+                                          <MapIcon size={14} /> マップ
                                         </button>
                                         <button onClick={(e) => { e.stopPropagation(); startEditing(cat.id, day.id, event); }} className="btn-secondary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem', color: 'var(--accent-color)' }}>
                                           編集

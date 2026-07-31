@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Plane, Car, Building2, Ticket, Copy, ExternalLink, MapPin, Home, Upload, X, Plus, ChevronDown, ChevronUp } from 'lucide-react';
-import { useTravelStore, type IconType, type Booking } from '../store';
-import { set, get } from 'idb-keyval';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plane, Car, Building2, Ticket, Copy, ExternalLink, MapPin, Home, Upload, X, Plus, ChevronDown, ChevronUp, Image as ImageIcon, Trash2, Pencil, Eye, Loader2, Check } from 'lucide-react';
+import { useTravelStore, type IconType, type Booking, type BookingAttachment } from '../store';
+import { get } from 'idb-keyval';
 import { Navigate } from 'react-router-dom';
 
 const getIcon = (type: IconType) => {
@@ -16,13 +16,97 @@ const getIcon = (type: IconType) => {
   }
 };
 
+const createClientId = () => Math.random().toString(36).substring(2, 9);
+
+const createImageKey = (bookingId: string) => {
+  return `booking-img-${bookingId}-${Date.now()}-${createClientId()}`;
+};
+
+const loadCloudBookingImage = async (imageKey: string) => {
+  const response = await fetch(`/api/get-booking-image?key=${encodeURIComponent(imageKey)}`);
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data?.message || data?.error || '画像を読み込めませんでした');
+  }
+  return data.imageData as string;
+};
+
+const saveCloudBookingImage = async (imageKey: string, imageData: string) => {
+  const response = await fetch('/api/save-booking-image', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ imageKey, imageData }),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data?.message || data?.error || '画像を保存できませんでした');
+  }
+};
+
+const deleteCloudBookingImage = async (imageKey: string) => {
+  await fetch('/api/delete-booking-image', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ imageKey }),
+  });
+};
+
+const readFileAsDataUrl = (file: File) => {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('画像を読み込めませんでした'));
+    reader.readAsDataURL(file);
+  });
+};
+
+const loadImageElement = (src: string) => {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('画像を処理できませんでした'));
+    image.src = src;
+  });
+};
+
+const compressImageFile = async (file: File) => {
+  const originalDataUrl = await readFileAsDataUrl(file);
+  const image = await loadImageElement(originalDataUrl);
+  const maxSide = 1600;
+  const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+  const width = Math.max(1, Math.round(image.width * scale));
+  const height = Math.max(1, Math.round(image.height * scale));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  if (!context) return originalDataUrl;
+
+  context.fillStyle = '#ffffff';
+  context.fillRect(0, 0, width, height);
+  context.drawImage(image, 0, 0, width, height);
+
+  const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+  return compressedDataUrl.length < originalDataUrl.length ? compressedDataUrl : originalDataUrl;
+};
+
 const BookingCard = ({ booking }: { booking: Booking }) => {
-  const updateBookingImage = useTravelStore((state) => state.updateBookingImage);
   const deleteBooking = useTravelStore((state) => state.deleteBooking);
   const updateBooking = useTravelStore((state) => state.updateBooking);
+  const addBookingAttachment = useTravelStore((state) => state.addBookingAttachment);
+  const updateBookingAttachment = useTravelStore((state) => state.updateBookingAttachment);
+  const deleteBookingAttachment = useTravelStore((state) => state.deleteBookingAttachment);
 
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [showQR, setShowQR] = useState(false);
+  const attachments = booking.attachments || [];
+  const attachmentSignature = attachments.map(attachment => `${attachment.id}:${attachment.imageKey}`).join('|');
+  const legacyImportingRef = useRef<string | null>(null);
+  const [attachmentUrls, setAttachmentUrls] = useState<Record<string, string>>({});
+  const [activeAttachmentId, setActiveAttachmentId] = useState<string | null>(null);
+  const [newAttachmentTitle, setNewAttachmentTitle] = useState('');
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+  const [editingAttachmentId, setEditingAttachmentId] = useState<string | null>(null);
+  const [editingAttachmentTitle, setEditingAttachmentTitle] = useState('');
 
   // 編集用の state
   const [isEditing, setIsEditing] = useState(false);
@@ -37,12 +121,128 @@ const BookingCard = ({ booking }: { booking: Booking }) => {
   const [editDate, setEditDate] = useState(booking.date || '');
 
   useEffect(() => {
-    if (booking.imageKey) {
-      get(booking.imageKey).then((data) => {
-        if (data) setImageUrl(data as string);
+    let cancelled = false;
+    attachments.forEach((attachment) => {
+      setAttachmentUrls(prev => {
+        if (prev[attachment.id]) return prev;
+        return prev;
+      });
+
+      void loadCloudBookingImage(attachment.imageKey)
+        .then((imageData) => {
+          if (cancelled) return;
+          setAttachmentUrls(prev => ({ ...prev, [attachment.id]: imageData }));
+        })
+        .catch(() => {
+          // Cloud image may not exist for older data; keep the card usable.
+        });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [attachmentSignature]);
+
+  useEffect(() => {
+    if (!booking.imageKey) return;
+    if (legacyImportingRef.current === booking.imageKey) return;
+    if (attachments.some(attachment => attachment.legacyImageKey === booking.imageKey)) return;
+
+    legacyImportingRef.current = booking.imageKey;
+    get(booking.imageKey).then(async (data) => {
+      if (!data || !booking.imageKey) return;
+      try {
+        const attachmentId = createClientId();
+        const imageKey = createImageKey(booking.id);
+        await saveCloudBookingImage(imageKey, data as string);
+        addBookingAttachment(booking.id, {
+          id: attachmentId,
+          title: 'QRスクショ',
+          imageKey,
+          legacyImageKey: booking.imageKey,
+          createdAt: new Date().toISOString(),
+        });
+        setAttachmentUrls(prev => ({ ...prev, [attachmentId]: data as string }));
+      } catch (error) {
+        console.error('Failed to migrate legacy booking image:', error);
+        legacyImportingRef.current = null;
+      }
+    });
+  }, [booking.id, booking.imageKey, attachmentSignature, attachments, addBookingAttachment]);
+
+  useEffect(() => {
+    setAttachmentUrls(prev => {
+      const activeIds = new Set(attachments.map(attachment => attachment.id));
+      const next = Object.fromEntries(Object.entries(prev).filter(([id]) => activeIds.has(id)));
+      return next;
+    });
+  }, [attachmentSignature]);
+
+  const activeAttachment = activeAttachmentId
+    ? attachments.find(attachment => attachment.id === activeAttachmentId) || null
+    : null;
+  const activeAttachmentUrl = activeAttachment ? attachmentUrls[activeAttachment.id] : null;
+
+  const handleAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    setIsUploadingAttachment(true);
+    const startingCount = attachments.length;
+    const titleBase = newAttachmentTitle.trim();
+
+    try {
+      for (let index = 0; index < files.length; index += 1) {
+        const imageData = await compressImageFile(files[index]);
+        const attachmentId = createClientId();
+        const imageKey = createImageKey(booking.id);
+        const title = titleBase
+          ? files.length === 1 ? titleBase : `${titleBase} ${index + 1}`
+          : `QR・チケット画像 ${startingCount + index + 1}`;
+
+        await saveCloudBookingImage(imageKey, imageData);
+        addBookingAttachment(booking.id, {
+          id: attachmentId,
+          title,
+          imageKey,
+          createdAt: new Date().toISOString(),
+        });
+        setAttachmentUrls(prev => ({ ...prev, [attachmentId]: imageData }));
+      }
+      setNewAttachmentTitle('');
+    } catch (error: any) {
+      alert(error?.message || '画像を追加できませんでした');
+    } finally {
+      setIsUploadingAttachment(false);
+      e.target.value = '';
+    }
+  };
+
+  const startEditingAttachment = (attachment: BookingAttachment) => {
+    setEditingAttachmentId(attachment.id);
+    setEditingAttachmentTitle(attachment.title);
+  };
+
+  const saveAttachmentTitle = () => {
+    if (!editingAttachmentId || !editingAttachmentTitle.trim()) return;
+    updateBookingAttachment(booking.id, editingAttachmentId, { title: editingAttachmentTitle.trim() });
+    setEditingAttachmentId(null);
+    setEditingAttachmentTitle('');
+  };
+
+  const removeAttachment = async (attachment: BookingAttachment) => {
+    if (!window.confirm(`${attachment.title} を削除してもよろしいですか？`)) return;
+    try {
+      await deleteCloudBookingImage(attachment.imageKey);
+    } finally {
+      deleteBookingAttachment(booking.id, attachment.id);
+      setAttachmentUrls(prev => {
+        const next = { ...prev };
+        delete next[attachment.id];
+        return next;
       });
     }
-  }, [booking.imageKey]);
+  };
 
   useEffect(() => {
     setEditCategory(booking.category);
@@ -59,21 +259,6 @@ const BookingCard = ({ booking }: { booking: Booking }) => {
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
     alert(`コピーしました: ${text}`);
-  };
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onloadend = async () => {
-      const base64String = reader.result as string;
-      const key = `booking-img-${booking.id}-${Date.now()}`;
-      await set(key, base64String);
-      updateBookingImage(booking.id, key);
-      setImageUrl(base64String);
-    };
-    reader.readAsDataURL(file);
   };
 
   const handleSave = (e: React.FormEvent) => {
@@ -259,51 +444,116 @@ const BookingCard = ({ booking }: { booking: Booking }) => {
               </div>
             )}
 
-            {/* Image / Screenshot Section */}
-            {imageUrl ? (
-              <div style={{ marginTop: '1rem' }}>
-                <button 
-                  onClick={() => setShowQR(true)} 
-                  className="btn-primary" 
-                  style={{ width: '100%', marginBottom: '0.5rem', display: 'flex', justifyContent: 'center', gap: '0.5rem', padding: '0.75rem' }}
-                >
-                  <Ticket size={18} /> QRコードを表示して使う
-                </button>
-                <div style={{ borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--glass-border)', position: 'relative' }}>
-                  <img src={imageUrl} alt="予約の画像" style={{ width: '100%', height: '120px', objectFit: 'cover', opacity: 0.6, display: 'block' }} />
-                  <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-                    <span style={{ background: 'rgba(0,0,0,0.5)', color: 'white', padding: '0.25rem 0.75rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 'bold' }}>画像プレビュー</span>
-                  </div>
+            <div style={{ marginTop: '1rem', borderTop: '1px solid rgba(148, 163, 184, 0.2)', paddingTop: '1rem' }}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2" style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: '0.9rem' }}>
+                  <ImageIcon size={17} color="var(--accent-color)" />
+                  QR・チケット画像
+                  <span className="text-xs text-slate-400">({attachments.length}枚)</span>
                 </div>
-                <label style={{ display: 'block', padding: '0.5rem', textAlign: 'center', background: 'rgba(0,0,0,0.03)', cursor: 'pointer', fontSize: '0.875rem', borderRadius: '0 0 8px 8px' }}>
-                  <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} />
-                  画像を変更する
+              </div>
+
+              {attachments.length > 0 && (
+                <div className="flex flex-col gap-2 mb-3">
+                  {attachments.map((attachment) => {
+                    const imageData = attachmentUrls[attachment.id];
+                    const isEditingAttachment = editingAttachmentId === attachment.id;
+
+                    return (
+                      <div key={attachment.id} style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', background: 'rgba(255,255,255,0.65)', border: '1px solid var(--glass-border)', borderRadius: '12px', padding: '0.6rem' }}>
+                        <button
+                          type="button"
+                          onClick={() => setActiveAttachmentId(attachment.id)}
+                          style={{ width: 72, height: 72, borderRadius: '10px', overflow: 'hidden', border: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.03)', padding: 0, cursor: imageData ? 'pointer' : 'wait', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >
+                          {imageData ? (
+                            <img src={imageData} alt={attachment.title} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                          ) : (
+                            <Loader2 size={20} className="animate-spin" color="var(--text-secondary)" />
+                          )}
+                        </button>
+
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          {isEditingAttachment ? (
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                className="input-field"
+                                value={editingAttachmentTitle}
+                                onChange={event => setEditingAttachmentTitle(event.target.value)}
+                                style={{ marginBottom: 0, fontSize: '0.85rem', minWidth: 0 }}
+                                autoFocus
+                              />
+                              <button type="button" onClick={saveAttachmentTitle} className="btn-primary" style={{ padding: '0.45rem', flexShrink: 0 }} title="保存" aria-label="保存">
+                                <Check size={16} />
+                              </button>
+                              <button type="button" onClick={() => setEditingAttachmentId(null)} className="btn-secondary" style={{ padding: '0.45rem', flexShrink: 0 }} title="キャンセル" aria-label="キャンセル">
+                                <X size={16} />
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <div style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--text-primary)', wordBreak: 'break-word' }}>
+                                {attachment.title}
+                              </div>
+                              <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
+                                {new Date(attachment.createdAt).toLocaleDateString('ja-JP')}
+                              </div>
+                            </>
+                          )}
+                        </div>
+
+                        {!isEditingAttachment && (
+                          <div className="flex" style={{ gap: '0.2rem', flexShrink: 0 }}>
+                            <button type="button" onClick={() => setActiveAttachmentId(attachment.id)} title="表示" aria-label="表示" style={{ background: 'none', border: 'none', color: 'var(--accent-color)', cursor: 'pointer', padding: '0.35rem', display: 'flex' }}>
+                              <Eye size={17} />
+                            </button>
+                            <button type="button" onClick={() => startEditingAttachment(attachment)} title="題名を編集" aria-label="題名を編集" style={{ background: 'none', border: 'none', color: 'var(--accent-color)', cursor: 'pointer', padding: '0.35rem', display: 'flex' }}>
+                              <Pencil size={17} />
+                            </button>
+                            <button type="button" onClick={() => void removeAttachment(attachment)} title="削除" aria-label="削除" style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '0.35rem', display: 'flex' }}>
+                              <Trash2 size={17} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.5rem', alignItems: 'center' }}>
+                <input
+                  type="text"
+                  className="input-field"
+                  placeholder="題名（例: 入場QR、座席表）"
+                  value={newAttachmentTitle}
+                  onChange={event => setNewAttachmentTitle(event.target.value)}
+                  style={{ marginBottom: 0, fontSize: '0.875rem', minWidth: 0 }}
+                />
+                <label className="btn-secondary flex items-center gap-2" style={{ cursor: isUploadingAttachment ? 'wait' : 'pointer', padding: '0.75rem', margin: 0, whiteSpace: 'nowrap' }}>
+                  <input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handleAttachmentUpload} disabled={isUploadingAttachment} />
+                  {isUploadingAttachment ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+                  追加
                 </label>
               </div>
-            ) : (
-              <label className="glass-card flex items-center justify-center gap-2" style={{ width: '100%', cursor: 'pointer', padding: '0.75rem', background: 'rgba(16, 185, 129, 0.1)', color: 'var(--accent-color)', border: '1px dashed var(--accent-glow)' }}>
-                <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} />
-                <Upload size={16} />
-                <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>QRスクショを追加</span>
-              </label>
-            )}
+            </div>
           </>
         )}
       </div>
 
-      {/* QR Code Full Screen Modal */}
-      {showQR && imageUrl && (
+      {activeAttachment && (
         <div 
-          onClick={() => setShowQR(false)}
+          onClick={() => setActiveAttachmentId(null)}
           style={{
             position: 'fixed', inset: 0, zIndex: 9999,
-            backgroundColor: '#FFFFFF', // Pure white to maximize brightness
+            backgroundColor: '#FFFFFF',
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
             padding: '2rem'
           }}
         >
           <button 
-            onClick={() => setShowQR(false)}
+            onClick={() => setActiveAttachmentId(null)}
             style={{
               position: 'absolute', top: '1.5rem', right: '1.5rem',
               background: '#F3F4F6', border: 'none', borderRadius: '50%',
@@ -317,22 +567,28 @@ const BookingCard = ({ booking }: { booking: Booking }) => {
           
           <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
             <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#111827', marginBottom: '0.25rem' }}>{booking.provider}</h3>
-            <p style={{ fontSize: '0.875rem', color: '#4B5563' }}>{booking.category}</p>
+            <p style={{ fontSize: '0.875rem', color: '#4B5563' }}>{activeAttachment.title}</p>
           </div>
 
           <div style={{ 
-            width: '100%', maxWidth: '400px', 
+            width: '100%', maxWidth: '520px', maxHeight: '70vh', overflow: 'auto',
             background: 'white', padding: '1rem',
             borderRadius: '16px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' 
-          }}>
-            <img 
-              src={imageUrl} 
-              alt="QR Code" 
-              style={{ 
-                width: '100%', height: 'auto', display: 'block',
-                filter: 'contrast(1.2) brightness(1.05)' // Boost contrast for easier scanning
-              }} 
-            />
+          }} onClick={event => event.stopPropagation()}>
+            {activeAttachmentUrl ? (
+              <img 
+                src={activeAttachmentUrl} 
+                alt={activeAttachment.title} 
+                style={{ 
+                  width: '100%', height: 'auto', display: 'block',
+                  filter: 'contrast(1.12) brightness(1.04)'
+                }} 
+              />
+            ) : (
+              <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6B7280', gap: '0.5rem' }}>
+                <Loader2 size={20} className="animate-spin" /> 読み込み中
+              </div>
+            )}
           </div>
           
           <p style={{ marginTop: '2rem', color: '#6B7280', fontSize: '0.875rem', textAlign: 'center' }}>

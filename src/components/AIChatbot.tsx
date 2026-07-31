@@ -239,14 +239,25 @@ export default function AIChatbot() {
 // Mini version of BookingCard for the chat UI
 function MiniBookingCard({ booking }: { booking: Booking }) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const firstAttachment = booking.attachments?.[0] || null;
 
   useEffect(() => {
+    if (firstAttachment) {
+      fetch(`/api/get-booking-image?key=${encodeURIComponent(firstAttachment.imageKey)}`)
+        .then(response => response.ok ? response.json() : null)
+        .then(data => {
+          if (data?.imageData) setImageUrl(data.imageData as string);
+        })
+        .catch(() => {});
+      return;
+    }
+
     if (booking.imageKey) {
       get(booking.imageKey).then((data) => {
         if (data) setImageUrl(data as string);
       });
     }
-  }, [booking.imageKey]);
+  }, [booking.imageKey, firstAttachment?.imageKey]);
 
   return (
     <div style={{ background: 'white', borderRadius: '16px', border: '1px solid var(--glass-border)', padding: '1rem', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
@@ -272,7 +283,7 @@ function MiniBookingCard({ booking }: { booking: Booking }) {
 
       {imageUrl && (
         <div style={{ borderRadius: '8px', overflow: 'hidden', marginTop: '0.5rem', border: '1px solid var(--glass-border)' }}>
-          <img src={imageUrl} alt="予約画像" style={{ width: '100%', display: 'block' }} />
+          <img src={imageUrl} alt={firstAttachment?.title || '予約画像'} style={{ width: '100%', display: 'block' }} />
         </div>
       )}
       {!imageUrl && !booking.link && (

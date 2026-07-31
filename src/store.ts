@@ -25,6 +25,14 @@ export interface TripCategory {
   schedules: DaySchedule[];
 }
 
+export interface BookingAttachment {
+  id: string;
+  title: string;
+  imageKey: string;
+  createdAt: string;
+  legacyImageKey?: string;
+}
+
 export interface Booking {
   id: string;
   category: string;
@@ -33,6 +41,7 @@ export interface Booking {
   reference: string;
   details: string;
   color: string;
+  attachments?: BookingAttachment[];
   imageKey?: string;
   link?: string;
   ticketNumber?: string;
@@ -150,6 +159,9 @@ interface TravelStore {
   deleteBooking: (bookingId: string) => void;
   updateBooking: (bookingId: string, updates: Partial<Booking>) => void;
   updateBookingImage: (bookingId: string, imageKey: string) => void;
+  addBookingAttachment: (bookingId: string, attachment: Omit<BookingAttachment, 'id' | 'createdAt'> & Partial<Pick<BookingAttachment, 'id' | 'createdAt'>>) => void;
+  updateBookingAttachment: (bookingId: string, attachmentId: string, updates: Partial<Pick<BookingAttachment, 'title'>>) => void;
+  deleteBookingAttachment: (bookingId: string, attachmentId: string) => void;
   addExpense: (expense: Omit<Expense, 'id'>) => void;
   updateExpense: (expenseId: string, updates: Partial<Expense>) => void;
   deleteExpense: (expenseId: string) => void;
@@ -684,6 +696,76 @@ export const useTravelStore = create<TravelStore>()(
             return {
               ...trip,
               bookings: trip.bookings.map(b => b.id === bookingId ? { ...b, imageKey } : b)
+            };
+          })
+        };
+      }),
+
+      addBookingAttachment: (bookingId, attachment) => set((state) => {
+        if (!state.selectedTripId) return state;
+        const attachmentToAdd: BookingAttachment = {
+          ...attachment,
+          id: attachment.id || generateId(),
+          createdAt: attachment.createdAt || new Date().toISOString(),
+        };
+
+        return {
+          trips: state.trips.map(trip => {
+            if (trip.id !== state.selectedTripId) return trip;
+            return {
+              ...trip,
+              bookings: trip.bookings.map(booking => {
+                if (booking.id !== bookingId) return booking;
+                const attachments = booking.attachments || [];
+                const alreadyExists = attachments.some(item => item.id === attachmentToAdd.id || item.imageKey === attachmentToAdd.imageKey);
+                if (alreadyExists) return booking;
+                return {
+                  ...booking,
+                  attachments: [...attachments, attachmentToAdd]
+                };
+              })
+            };
+          })
+        };
+      }),
+
+      updateBookingAttachment: (bookingId, attachmentId, updates) => set((state) => {
+        if (!state.selectedTripId) return state;
+        return {
+          trips: state.trips.map(trip => {
+            if (trip.id !== state.selectedTripId) return trip;
+            return {
+              ...trip,
+              bookings: trip.bookings.map(booking =>
+                booking.id === bookingId
+                  ? {
+                      ...booking,
+                      attachments: (booking.attachments || []).map(attachment =>
+                        attachment.id === attachmentId ? { ...attachment, ...updates } : attachment
+                      )
+                    }
+                  : booking
+              )
+            };
+          })
+        };
+      }),
+
+      deleteBookingAttachment: (bookingId, attachmentId) => set((state) => {
+        if (!state.selectedTripId) return state;
+        return {
+          trips: state.trips.map(trip => {
+            if (trip.id !== state.selectedTripId) return trip;
+            return {
+              ...trip,
+              bookings: trip.bookings.map(booking =>
+                booking.id === bookingId
+                  ? {
+                      ...booking,
+                      attachments: (booking.attachments || []).filter(attachment => attachment.id !== attachmentId)
+                    }
+                  : booking
+              )
             };
           })
         };

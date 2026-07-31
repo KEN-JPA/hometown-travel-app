@@ -105,6 +105,7 @@ const BookingCard = ({ booking }: { booking: Booking }) => {
   const [activeAttachmentId, setActiveAttachmentId] = useState<string | null>(null);
   const [newAttachmentTitle, setNewAttachmentTitle] = useState('');
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+  const [isDraggingAttachment, setIsDraggingAttachment] = useState(false);
   const [editingAttachmentId, setEditingAttachmentId] = useState<string | null>(null);
   const [editingAttachmentTitle, setEditingAttachmentTitle] = useState('');
 
@@ -183,9 +184,14 @@ const BookingCard = ({ booking }: { booking: Booking }) => {
     : null;
   const activeAttachmentUrl = activeAttachment ? attachmentUrls[activeAttachment.id] : null;
 
-  const handleAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
+  const uploadAttachmentFiles = async (incomingFiles: File[]) => {
+    const files = incomingFiles.filter(file => file.type.startsWith('image/'));
+    if (files.length === 0) {
+      if (incomingFiles.length > 0) {
+        alert('画像ファイルを追加してください');
+      }
+      return;
+    }
 
     setIsUploadingAttachment(true);
     const startingCount = attachments.length;
@@ -214,8 +220,35 @@ const BookingCard = ({ booking }: { booking: Booking }) => {
       alert(error?.message || '画像を追加できませんでした');
     } finally {
       setIsUploadingAttachment(false);
-      e.target.value = '';
     }
+  };
+
+  const handleAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    await uploadAttachmentFiles(Array.from(e.target.files || []));
+    e.target.value = '';
+  };
+
+  const handleAttachmentDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!isUploadingAttachment) {
+      setIsDraggingAttachment(true);
+    }
+  };
+
+  const handleAttachmentDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const nextTarget = event.relatedTarget as Node | null;
+    if (nextTarget && event.currentTarget.contains(nextTarget)) return;
+    setIsDraggingAttachment(false);
+  };
+
+  const handleAttachmentDrop = async (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDraggingAttachment(false);
+    await uploadAttachmentFiles(Array.from(event.dataTransfer.files || []));
   };
 
   const startEditingAttachment = (attachment: BookingAttachment) => {
@@ -522,20 +555,53 @@ const BookingCard = ({ booking }: { booking: Booking }) => {
                 </div>
               )}
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.5rem', alignItems: 'center' }}>
-                <input
-                  type="text"
-                  className="input-field"
-                  placeholder="題名（例: 入場QR、座席表）"
-                  value={newAttachmentTitle}
-                  onChange={event => setNewAttachmentTitle(event.target.value)}
-                  style={{ marginBottom: 0, fontSize: '0.875rem', minWidth: 0 }}
-                />
-                <label className="btn-secondary flex items-center gap-2" style={{ cursor: isUploadingAttachment ? 'wait' : 'pointer', padding: '0.75rem', margin: 0, whiteSpace: 'nowrap' }}>
-                  <input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handleAttachmentUpload} disabled={isUploadingAttachment} />
-                  {isUploadingAttachment ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-                  追加
-                </label>
+              <div
+                onDragEnter={handleAttachmentDragOver}
+                onDragOver={handleAttachmentDragOver}
+                onDragLeave={handleAttachmentDragLeave}
+                onDrop={handleAttachmentDrop}
+                aria-label="QR・チケット画像を追加"
+                style={{
+                  border: `1.5px dashed ${isDraggingAttachment ? 'var(--accent-color)' : 'var(--glass-border)'}`,
+                  background: isDraggingAttachment ? 'rgba(16, 185, 129, 0.14)' : 'rgba(16, 185, 129, 0.06)',
+                  borderRadius: '12px',
+                  padding: '0.75rem',
+                  transition: 'background 0.15s ease, border-color 0.15s ease',
+                }}
+              >
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.5rem', alignItems: 'center' }}>
+                  <input
+                    type="text"
+                    className="input-field"
+                    placeholder="題名（例: 入場QR、座席表）"
+                    value={newAttachmentTitle}
+                    onChange={event => setNewAttachmentTitle(event.target.value)}
+                    style={{ marginBottom: 0, fontSize: '0.875rem', minWidth: 0 }}
+                  />
+                  <label className="btn-secondary flex items-center gap-2" style={{ cursor: isUploadingAttachment ? 'wait' : 'pointer', padding: '0.75rem', margin: 0, whiteSpace: 'nowrap' }}>
+                    <input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handleAttachmentUpload} disabled={isUploadingAttachment} />
+                    {isUploadingAttachment ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+                    追加
+                  </label>
+                </div>
+                <div style={{ marginTop: '0.55rem', color: isDraggingAttachment ? 'var(--accent-color)' : 'var(--text-secondary)', fontSize: '0.78rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
+                  {isUploadingAttachment ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" />
+                      アップロード中
+                    </>
+                  ) : isDraggingAttachment ? (
+                    <>
+                      <Upload size={14} />
+                      ここにドロップ
+                    </>
+                  ) : (
+                    <>
+                      <Upload size={14} />
+                      クリックまたはドロップで追加
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </>

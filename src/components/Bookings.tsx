@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plane, Car, Building2, Ticket, Copy, ExternalLink, MapPin, Home, Upload, X, Plus, ChevronDown, ChevronUp, Image as ImageIcon, Trash2, Pencil, Eye, Loader2, Check } from 'lucide-react';
+import { Plane, Car, Building2, Ticket, Copy, ExternalLink, MapPin, Home, Upload, X, Plus, ChevronDown, ChevronUp, Image as ImageIcon, Trash2, Pencil, Eye, Loader2, Check, FileText, Download } from 'lucide-react';
 import { useTravelStore, type IconType, type Booking, type BookingAttachment } from '../store';
 import { get } from 'idb-keyval';
 import { Navigate } from 'react-router-dom';
@@ -18,15 +18,15 @@ const getIcon = (type: IconType) => {
 
 const createClientId = () => Math.random().toString(36).substring(2, 9);
 
-const createImageKey = (bookingId: string) => {
-  return `booking-img-${bookingId}-${Date.now()}-${createClientId()}`;
+const createAttachmentKey = (bookingId: string) => {
+  return `booking-attachment-${bookingId}-${Date.now()}-${createClientId()}`;
 };
 
 const loadCloudBookingImage = async (imageKey: string) => {
   const response = await fetch(`/api/get-booking-image?key=${encodeURIComponent(imageKey)}`);
   const data = await response.json();
   if (!response.ok) {
-    throw new Error(data?.message || data?.error || '画像を読み込めませんでした');
+    throw new Error(data?.message || data?.error || 'ファイルを読み込めませんでした');
   }
   return data.imageData as string;
 };
@@ -39,7 +39,7 @@ const saveCloudBookingImage = async (imageKey: string, imageData: string) => {
   });
   const data = await response.json();
   if (!response.ok) {
-    throw new Error(data?.message || data?.error || '画像を保存できませんでした');
+    throw new Error(data?.message || data?.error || 'ファイルを保存できませんでした');
   }
 };
 
@@ -55,9 +55,23 @@ const readFileAsDataUrl = (file: File) => {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new Error('画像を読み込めませんでした'));
+    reader.onerror = () => reject(new Error('ファイルを読み込めませんでした'));
     reader.readAsDataURL(file);
   });
+};
+
+const isPdfFile = (file: File) => {
+  return file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+};
+
+const isSupportedAttachmentFile = (file: File) => {
+  return file.type.startsWith('image/') || isPdfFile(file);
+};
+
+const isPdfAttachment = (attachment: BookingAttachment, dataUrl?: string) => {
+  return attachment.contentType === 'application/pdf'
+    || attachment.fileName?.toLowerCase().endsWith('.pdf')
+    || dataUrl?.startsWith('data:application/pdf');
 };
 
 const loadImageElement = (src: string) => {
@@ -89,6 +103,16 @@ const compressImageFile = async (file: File) => {
 
   const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.9);
   return compressedDataUrl.length < originalDataUrl.length ? compressedDataUrl : originalDataUrl;
+};
+
+const readAttachmentFile = async (file: File) => {
+  if (isPdfFile(file)) {
+    const dataUrl = await readFileAsDataUrl(file);
+    if (dataUrl.startsWith('data:application/pdf')) return dataUrl;
+    const base64Payload = dataUrl.split(',')[1] || '';
+    return `data:application/pdf;base64,${base64Payload}`;
+  }
+  return compressImageFile(file);
 };
 
 const BookingCard = ({ booking }: { booking: Booking }) => {
@@ -154,12 +178,13 @@ const BookingCard = ({ booking }: { booking: Booking }) => {
       if (!data || !booking.imageKey) return;
       try {
         const attachmentId = createClientId();
-        const imageKey = createImageKey(booking.id);
+        const imageKey = createAttachmentKey(booking.id);
         await saveCloudBookingImage(imageKey, data as string);
         addBookingAttachment(booking.id, {
           id: attachmentId,
           title: 'QRスクショ',
           imageKey,
+          contentType: 'image/*',
           legacyImageKey: booking.imageKey,
           createdAt: new Date().toISOString(),
         });
@@ -183,12 +208,13 @@ const BookingCard = ({ booking }: { booking: Booking }) => {
     ? attachments.find(attachment => attachment.id === activeAttachmentId) || null
     : null;
   const activeAttachmentUrl = activeAttachment ? attachmentUrls[activeAttachment.id] : null;
+  const activeAttachmentIsPdf = activeAttachment ? isPdfAttachment(activeAttachment, activeAttachmentUrl || undefined) : false;
 
   const uploadAttachmentFiles = async (incomingFiles: File[]) => {
-    const files = incomingFiles.filter(file => file.type.startsWith('image/'));
+    const files = incomingFiles.filter(isSupportedAttachmentFile);
     if (files.length === 0) {
       if (incomingFiles.length > 0) {
-        alert('画像ファイルを追加してください');
+        alert('画像またはPDFファイルを追加してください');
       }
       return;
     }
@@ -199,25 +225,28 @@ const BookingCard = ({ booking }: { booking: Booking }) => {
 
     try {
       for (let index = 0; index < files.length; index += 1) {
-        const imageData = await compressImageFile(files[index]);
+        const file = files[index];
+        const attachmentData = await readAttachmentFile(file);
         const attachmentId = createClientId();
-        const imageKey = createImageKey(booking.id);
+        const imageKey = createAttachmentKey(booking.id);
         const title = titleBase
           ? files.length === 1 ? titleBase : `${titleBase} ${index + 1}`
-          : `QR・チケット画像 ${startingCount + index + 1}`;
+          : `${isPdfFile(file) ? 'PDF' : 'QR・チケット画像'} ${startingCount + index + 1}`;
 
-        await saveCloudBookingImage(imageKey, imageData);
+        await saveCloudBookingImage(imageKey, attachmentData);
         addBookingAttachment(booking.id, {
           id: attachmentId,
           title,
           imageKey,
+          contentType: isPdfFile(file) ? 'application/pdf' : file.type || 'image/*',
+          fileName: file.name,
           createdAt: new Date().toISOString(),
         });
-        setAttachmentUrls(prev => ({ ...prev, [attachmentId]: imageData }));
+        setAttachmentUrls(prev => ({ ...prev, [attachmentId]: attachmentData }));
       }
       setNewAttachmentTitle('');
     } catch (error: any) {
-      alert(error?.message || '画像を追加できませんでした');
+      alert(error?.message || 'ファイルを追加できませんでした');
     } finally {
       setIsUploadingAttachment(false);
     }
@@ -481,7 +510,7 @@ const BookingCard = ({ booking }: { booking: Booking }) => {
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2" style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: '0.9rem' }}>
                   <ImageIcon size={17} color="var(--accent-color)" />
-                  QR・チケット画像
+                  QR・チケット画像/PDF
                   <span className="text-xs text-slate-400">({attachments.length}枚)</span>
                 </div>
               </div>
@@ -491,6 +520,7 @@ const BookingCard = ({ booking }: { booking: Booking }) => {
                   {attachments.map((attachment) => {
                     const imageData = attachmentUrls[attachment.id];
                     const isEditingAttachment = editingAttachmentId === attachment.id;
+                    const isPdf = isPdfAttachment(attachment, imageData);
 
                     return (
                       <div key={attachment.id} style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', background: 'rgba(255,255,255,0.65)', border: '1px solid var(--glass-border)', borderRadius: '12px', padding: '0.6rem' }}>
@@ -499,7 +529,12 @@ const BookingCard = ({ booking }: { booking: Booking }) => {
                           onClick={() => setActiveAttachmentId(attachment.id)}
                           style={{ width: 72, height: 72, borderRadius: '10px', overflow: 'hidden', border: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.03)', padding: 0, cursor: imageData ? 'pointer' : 'wait', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                         >
-                          {imageData ? (
+                          {imageData && isPdf ? (
+                            <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.2rem', background: 'rgba(239, 68, 68, 0.08)', color: '#ef4444', fontWeight: 900, fontSize: '0.7rem' }}>
+                              <FileText size={24} />
+                              PDF
+                            </div>
+                          ) : imageData ? (
                             <img src={imageData} alt={attachment.title} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                           ) : (
                             <Loader2 size={20} className="animate-spin" color="var(--text-secondary)" />
@@ -530,6 +565,7 @@ const BookingCard = ({ booking }: { booking: Booking }) => {
                                 {attachment.title}
                               </div>
                               <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
+                                {isPdf ? 'PDF / ' : ''}
                                 {new Date(attachment.createdAt).toLocaleDateString('ja-JP')}
                               </div>
                             </>
@@ -573,13 +609,13 @@ const BookingCard = ({ booking }: { booking: Booking }) => {
                   <input
                     type="text"
                     className="input-field"
-                    placeholder="題名（例: 入場QR、座席表）"
+                    placeholder="題名（例: 入場QR、座席表、予約PDF）"
                     value={newAttachmentTitle}
                     onChange={event => setNewAttachmentTitle(event.target.value)}
                     style={{ marginBottom: 0, fontSize: '0.875rem', minWidth: 0 }}
                   />
                   <label className="btn-secondary flex items-center gap-2" style={{ cursor: isUploadingAttachment ? 'wait' : 'pointer', padding: '0.75rem', margin: 0, whiteSpace: 'nowrap' }}>
-                    <input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handleAttachmentUpload} disabled={isUploadingAttachment} />
+                    <input type="file" accept="image/*,application/pdf,.pdf" multiple style={{ display: 'none' }} onChange={handleAttachmentUpload} disabled={isUploadingAttachment} />
                     {isUploadingAttachment ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
                     追加
                   </label>
@@ -598,7 +634,7 @@ const BookingCard = ({ booking }: { booking: Booking }) => {
                   ) : (
                     <>
                       <Upload size={14} />
-                      クリックまたはドロップで追加
+                      画像/PDFをクリックまたはドロップで追加
                     </>
                   )}
                 </div>
@@ -637,11 +673,37 @@ const BookingCard = ({ booking }: { booking: Booking }) => {
           </div>
 
           <div style={{ 
-            width: '100%', maxWidth: '520px', maxHeight: '70vh', overflow: 'auto',
+            width: '100%', maxWidth: activeAttachmentIsPdf ? '900px' : '520px', maxHeight: '70vh', overflow: 'auto',
             background: 'white', padding: '1rem',
             borderRadius: '16px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' 
           }} onClick={event => event.stopPropagation()}>
-            {activeAttachmentUrl ? (
+            {activeAttachmentUrl && activeAttachmentIsPdf ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <iframe
+                  src={activeAttachmentUrl}
+                  title={activeAttachment.title}
+                  style={{ width: '100%', minHeight: '62vh', border: '1px solid #E5E7EB', borderRadius: '10px', background: '#F9FAFB' }}
+                />
+                <div className="flex" style={{ gap: '0.5rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={() => window.open(activeAttachmentUrl, '_blank', 'noopener,noreferrer')}
+                    className="btn-secondary"
+                    style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.45rem' }}
+                  >
+                    <ExternalLink size={16} /> 別タブで開く
+                  </button>
+                  <a
+                    href={activeAttachmentUrl}
+                    download={activeAttachment.fileName || `${activeAttachment.title}.pdf`}
+                    className="btn-secondary"
+                    style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.45rem' }}
+                  >
+                    <Download size={16} /> ダウンロード
+                  </a>
+                </div>
+              </div>
+            ) : activeAttachmentUrl ? (
               <img 
                 src={activeAttachmentUrl} 
                 alt={activeAttachment.title} 
@@ -658,7 +720,11 @@ const BookingCard = ({ booking }: { booking: Booking }) => {
           </div>
           
           <p style={{ marginTop: '2rem', color: '#6B7280', fontSize: '0.875rem', textAlign: 'center' }}>
-            読み取りやすいよう画面を<br/>明るくして表示しています
+            {activeAttachmentIsPdf ? (
+              <>PDFが表示されない場合は<br/>別タブで開いてください</>
+            ) : (
+              <>読み取りやすいよう画面を<br/>明るくして表示しています</>
+            )}
           </p>
         </div>
       )}

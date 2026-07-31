@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageCircle, X, Send, Bot, Ticket, ExternalLink, Image as ImageIcon } from 'lucide-react';
+import { MessageCircle, X, Send, Bot, Ticket, ExternalLink, Image as ImageIcon, FileText } from 'lucide-react';
 import { useTravelStore, type Booking } from '../store';
 import { get } from 'idb-keyval';
 
@@ -240,6 +240,11 @@ export default function AIChatbot() {
 function MiniBookingCard({ booking }: { booking: Booking }) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const firstAttachment = booking.attachments?.[0] || null;
+  const isPdfAttachment = firstAttachment
+    ? firstAttachment.contentType === 'application/pdf'
+      || firstAttachment.fileName?.toLowerCase().endsWith('.pdf')
+      || imageUrl?.startsWith('data:application/pdf')
+    : false;
 
   useEffect(() => {
     if (firstAttachment) {
@@ -281,7 +286,20 @@ function MiniBookingCard({ booking }: { booking: Booking }) {
         </a>
       )}
 
-      {imageUrl && (
+      {imageUrl && isPdfAttachment && firstAttachment && (
+        <div style={{ borderRadius: '8px', marginTop: '0.5rem', border: '1px solid var(--glass-border)', padding: '0.65rem', display: 'flex', alignItems: 'center', gap: '0.55rem', background: 'rgba(239,68,68,0.06)' }}>
+          <FileText size={18} color="#ef4444" />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{firstAttachment.title}</div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>PDF</div>
+          </div>
+          <a href={imageUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-color)', display: 'flex' }}>
+            <ExternalLink size={15} />
+          </a>
+        </div>
+      )}
+
+      {imageUrl && !isPdfAttachment && (
         <div style={{ borderRadius: '8px', overflow: 'hidden', marginTop: '0.5rem', border: '1px solid var(--glass-border)' }}>
           <img src={imageUrl} alt={firstAttachment?.title || '予約画像'} style={{ width: '100%', display: 'block' }} />
         </div>

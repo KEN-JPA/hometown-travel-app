@@ -30,6 +30,8 @@ export interface BookingAttachment {
   title: string;
   imageKey: string;
   createdAt: string;
+  contentType?: string;
+  fileName?: string;
   legacyImageKey?: string;
 }
 

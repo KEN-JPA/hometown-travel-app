@@ -2,7 +2,7 @@
 import { Redis } from '@upstash/redis';
 
 const IMAGE_KEY_PREFIX = 'family_travel_booking_image:';
-const MAX_IMAGE_DATA_CHARS = Number(process.env.BOOKING_IMAGE_MAX_CHARS || 3_000_000);
+const MAX_ATTACHMENT_DATA_CHARS = Number(process.env.BOOKING_ATTACHMENT_MAX_CHARS || process.env.BOOKING_IMAGE_MAX_CHARS || 3_000_000);
 
 const createRedis = () => new Redis({
   url: process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || '',
@@ -10,6 +10,9 @@ const createRedis = () => new Redis({
 });
 
 const isValidImageKey = (value: string) => /^[a-zA-Z0-9:_-]{1,180}$/.test(value);
+const isSupportedAttachmentData = (value: string) => {
+  return value.startsWith('data:image/') || value.startsWith('data:application/pdf');
+};
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -24,14 +27,14 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Invalid image key' });
     }
 
-    if (!imageData.startsWith('data:image/')) {
-      return res.status(400).json({ error: 'Invalid image data' });
+    if (!isSupportedAttachmentData(imageData)) {
+      return res.status(400).json({ error: 'Invalid attachment data' });
     }
 
-    if (imageData.length > MAX_IMAGE_DATA_CHARS) {
+    if (imageData.length > MAX_ATTACHMENT_DATA_CHARS) {
       return res.status(413).json({
-        error: 'Image too large',
-        message: '画像が大きすぎます。スクリーンショットを少し小さくしてから再度追加してください。',
+        error: 'Attachment too large',
+        message: 'ファイルが大きすぎます。小さい画像またはPDFを追加してください。',
       });
     }
 
